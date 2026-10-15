@@ -2,14 +2,13 @@
 
 import os
 from pathlib import Path
-from typing import Literal
-
 import httpx
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict
 
 from app.agents import AGENTS, build_system_prompt
+from app.dialogues import DIALOGUES, append_turn, generation, reset_dialogues
 
 load_dotenv(Path(__file__).resolve().parents[1] / ".env")
 
@@ -17,25 +16,37 @@ app = FastAPI(title="Локальные ИИ-соседи", version="0.1.0")
 DEEPSEEK_URL = "https://api.deepseek.com/chat/completions"
 
 
-class HistoryMessage(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-    role: Literal["user", "assistant"]
-    content: str = Field(min_length=1, max_length=4000)
-
-
 class ChatRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     agent_id: str
     question_id: str
-    history: list[HistoryMessage] = Field(default_factory=list, max_length=40)
 
 
 class ChatResponse(BaseModel):
     reply: str
 
 
+class DialogueResponse(BaseModel):
+    answers: dict[str, str]
+
+
 @app.get("/health")
 async def health() -> dict[str, str]:
+    return {"status": "ok"}
+
+
+@app.get("/api/dialogue/{agent_id}", response_model=DialogueResponse)
+async def get_dialogue(agent_id: str) -> DialogueResponse:
+    if agent_id not in AGENTS:
+        raise HTTPException(status_code=404, detail="Unknown agent")
+    return DialogueResponse(
+        answers={turn["question_id"]: turn["reply"] for turn in DIALOGUES.get(agent_id, [])}
+    )
+
+
+@app.post("/api/dialogue/reset")
+async def clear_dialogues() -> dict[str, str]:
+    reset_dialogues()
     return {"status": "ok"}
 
 
@@ -49,19 +60,15 @@ async def chat(request: ChatRequest) -> ChatResponse:
     if question is None:
         raise HTTPException(status_code=422, detail="Unknown question for this agent")
 
-    allowed_history_questions = {item["text"] for item in agent["questions"].values()}
-    if any(
-        message.role == "user" and message.content not in allowed_history_questions
-        for message in request.history
-    ):
-        raise HTTPException(status_code=422, detail="History contains a non-demo question")
-
     api_key = os.getenv("DEEPSEEK_API_KEY", "").strip()
     if not api_key:
         raise HTTPException(status_code=503, detail="DeepSeek API key is not configured")
 
     messages = [{"role": "system", "content": build_system_prompt(request.agent_id)}]
-    messages.extend(message.model_dump() for message in request.history)
+    request_generation = generation(request.agent_id)
+    for turn in DIALOGUES.get(request.agent_id, []):
+        messages.append({"role": "user", "content": turn["question"]})
+        messages.append({"role": "assistant", "content": turn["reply"]})
     messages.append({"role": "user", "content": question["text"]})
     payload = {
         "model": os.getenv("DEEPSEEK_MODEL", "deepseek-flash"),
@@ -89,4 +96,11 @@ async def chat(request: ChatRequest) -> ChatResponse:
         raise HTTPException(status_code=502, detail="Invalid DeepSeek response") from exc
     if not isinstance(reply, str) or not reply.strip():
         raise HTTPException(status_code=502, detail="Empty DeepSeek response")
-    return ChatResponse(reply=reply.strip())
+    reply = reply.strip()
+    if not append_turn(
+        request.agent_id,
+        {"question_id": request.question_id, "question": question["text"], "reply": reply},
+        request_generation,
+    ):
+        raise HTTPException(status_code=409, detail="Dialogue was reset while the reply was pending")
+    return ChatResponse(reply=reply)

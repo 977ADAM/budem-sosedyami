@@ -16,7 +16,7 @@
 - Игрок выбирает только готовые вопросы; свободный текстовый ввод не добавляется.
 - DeepSeek API вызывается только из FastAPI на локальном компьютере; API-ключ хранится в `backend/.env`.
 - При backend/DeepSeek ошибке, отсутствии ключа, таймауте или невалидном ответе игра использует прежний статичный `q.answer`.
-- История чата хранится в памяти браузера, отдельно для каждого соседа; сервер не хранит сессии.
+- История диалогов хранится в памяти backend-процесса отдельно для каждого соседа; клиент не передаёт историю и не включает fallback в контекст модели.
 - Новые автоматические тесты не добавлять; проверять ручными сценариями и production build.
 
 ## Review Focus
@@ -65,8 +65,10 @@
 
 **Interfaces:**
 - `GET /health` → `{ "status": "ok" }`.
-- `POST /api/chat` request: `{ "agent_id": str, "question_id": str, "history": [{ "role": "user" | "assistant", "content": str }] }`.
+- `POST /api/chat` request: `{ "agent_id": str, "question_id": str }`.
 - `POST /api/chat` success: `{ "reply": str }`.
+- `GET /api/dialogue/{agent_id}` returns `{ "answers": { question_id: reply } }` for UI rendering.
+- `POST /api/dialogue/reset` clears in-memory histories.
 - Errors: unknown agent 404; unknown question 422; missing API key 503; upstream timeout 504; other upstream/network failure 502.
 
 - [ ] **Step 1: Добавить backend dependencies и env template**
@@ -79,7 +81,7 @@
 
 - [ ] **Step 3: Реализовать FastAPI schemas и endpoint**
 
-В `main.py` загрузить `backend/.env` через `load_dotenv`, создать `app = FastAPI()`, Pydantic-модели запроса/истории/ответа и `GET /health`. Для `POST /api/chat` проверить агент и вопрос, затем вызвать DeepSeek Chat Completions через `httpx.AsyncClient(timeout=30.0)` по адресу `https://api.deepseek.com/chat/completions`, передав model из `DEEPSEEK_MODEL` или `deepseek-flash`, system prompt, переданную history и текст выбранного вопроса. Заголовок Bearer формировать только на backend. Возвращать `{ "reply": ... }`; ошибки преобразовать в статусы из Interfaces.
+В `main.py` загрузить `backend/.env` через `load_dotenv`, создать `app = FastAPI()`, Pydantic-модели запроса/ответа и `GET /health`. Для `POST /api/chat` проверить агент и вопрос, затем вызвать DeepSeek Chat Completions через `httpx.AsyncClient(timeout=30.0)` по адресу `https://api.deepseek.com/chat/completions`, передав model из `DEEPSEEK_MODEL` или `deepseek-flash`, system prompt, серверную историю успешных реплик этого агента и текст выбранного вопроса. Добавить `GET /api/dialogue/{agent_id}` для отображения ответов и `POST /api/dialogue/reset` для сброса памяти. Заголовок Bearer формировать только на backend. Возвращать `{ "reply": ... }`; ошибки преобразовать в статусы из Interfaces.
 
 - [ ] **Step 4: Установить backend и проверить endpoint вручную**
 
@@ -102,7 +104,7 @@
 
 - [ ] **Step 2: Добавить per-agent ответы и историю в игровое состояние**
 
-В `game-map-start.js` рядом с `choices` добавить `answers` (по agent ID и question ID) и `pendingQuestion`. Сохранять order вопросов через существующие `Set` в `choices`. Сформировать history из предыдущих user-вопросов и реально сохранённых assistant AI-ответов этого же агента; не включать fallback в историю модели и не включать текущий вопрос дважды.
+В `game-map-start.js` оставить состояние выбора вопросов и ожидания только для UI. Вынести вызов `/api/chat`, загрузку ответов диалога и сброс истории в тонкий `agent-api.js`. Собирать историю модели исключительно в backend, отдельно для каждого agent ID.
 
 - [ ] **Step 3: Запрашивать FastAPI при выборе готового вопроса**
 
@@ -110,7 +112,7 @@
 
 - [ ] **Step 4: Отобразить ожидание и безопасно обработать смену экрана**
 
-Во время запроса отобразить индикатор ожидания и отключить вопросные кнопки. При завершении очистить pending независимо от результата. Сохранить ответ у исходного agent ID; перерисовывать чат только если он всё ещё активен, чтобы ответ не попал в чужой диалог. Сброс игры также очищает историю ответов.
+Во время запроса отобразить индикатор ожидания и отключить вопросные кнопки. При завершении очистить pending независимо от результата. Перерисовывать чат только если исходный agent ID всё ещё активен, чтобы ответ не попал в чужой диалог. Сброс игры очищает backend-истории.
 
 - [ ] **Step 5: Обновить README и пройти локальный сценарий вручную**
 

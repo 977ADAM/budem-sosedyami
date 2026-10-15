@@ -1,3 +1,5 @@
+import { askAgent, loadDialogue, resetDialogues } from "./agent-api.js";
+
 const people = {
   anton: {
     id: "anton",
@@ -267,6 +269,7 @@ const state = {
   selectedPerson: null,
   choices: Object.fromEntries(Object.keys(people).map((id) => [id, new Set()])),
   answers: Object.fromEntries(Object.keys(people).map((id) => [id, {}])),
+  dialogueRevisions: Object.fromEntries(Object.keys(people).map((id) => [id, 0])),
   pendingQuestion: null,
 };
 const MATCH_GOAL = 3;
@@ -378,7 +381,10 @@ function showScreen(name) {
     renderNeighbors();
     fitMap();
   }
-  if (name === "chat") renderChat();
+  if (name === "chat") {
+    renderChat();
+    refreshDialogue(state.activePerson);
+  }
   if (name === "choice") renderChoice();
   if (name === "reveal") renderReveal();
 }
@@ -454,22 +460,21 @@ function renderChat() {
   $("#chat-messages").scrollTop = $("#chat-messages").scrollHeight;
 }
 
-function buildAgentHistory(personId, currentQuestionId) {
-  const person = people[personId];
-  const history = [];
-  for (const questionId of state.choices[personId]) {
-    if (questionId === currentQuestionId) continue;
-    const question = person.questions.find((item) => item.id === questionId);
-    if (!question) continue;
-    history.push({ role: "user", content: question.label });
-    const answer = state.answers[personId][question.id];
-    if (answer) history.push({ role: "assistant", content: answer });
+async function refreshDialogue(personId) {
+  const revision = state.dialogueRevisions[personId];
+  try {
+    const answers = await loadDialogue(personId);
+    if (revision !== state.dialogueRevisions[personId]) return;
+    state.answers[personId] = answers;
+    if (state.screen === "chat" && state.activePerson === personId) renderChat();
+  } catch {
+    // Static demo answers remain visible when the backend is unavailable.
   }
-  return history;
 }
 
 async function askQuestion(personId, question) {
   state.choices[personId].add(question.id);
+  const revision = ++state.dialogueRevisions[personId];
   const pending = { agentId: personId, questionId: question.id };
   state.pendingQuestion = pending;
   renderNeighbors();
@@ -478,21 +483,9 @@ async function askQuestion(personId, question) {
   let fallback = false;
   let cancelled = false;
   try {
-    const response = await fetch("/api/chat", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        agent_id: personId,
-        question_id: question.id,
-        history: buildAgentHistory(personId, question.id),
-      }),
-    });
-    if (!response.ok) throw new Error("Backend returned an error");
-    const data = await response.json();
-    if (typeof data.reply !== "string" || !data.reply.trim())
-      throw new Error("Backend returned an empty reply");
-    if (state.pendingQuestion !== pending) return;
-    state.answers[personId][question.id] = data.reply.trim();
+    const reply = await askAgent(personId, question.id);
+    if (state.pendingQuestion !== pending || revision !== state.dialogueRevisions[personId]) return;
+    state.answers[personId][question.id] = reply;
   } catch {
     fallback = true;
   } finally {
@@ -586,11 +579,13 @@ document.addEventListener("click", (event) => {
     Object.values(state.answers).forEach((answers) =>
       Object.keys(answers).forEach((id) => delete answers[id]),
     );
+    Object.keys(state.dialogueRevisions).forEach((id) => state.dialogueRevisions[id]++);
     state.pendingQuestion = null;
     state.selectedPerson = null;
     state.activePerson = "anton";
     closeModal();
     showScreen("neighbors");
+    resetDialogues().catch(() => showToast("Не удалось очистить историю на backend"));
   }
   if (action === "start") showScreen("neighbors");
   if (action === "chat") {
