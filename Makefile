@@ -14,3 +14,9 @@ migrate: ## Apply application database migrations with Alembic
 
 checkpoint-migrate: ## Apply LangGraph checkpoint migrations
 	cd backend && $(UV) run python -m app.migrate_checkpoints
+
+dev-frontend: ## Serve the static chat frontend on the CORS-allowed 127.0.0.1:3000
+	cd frontend && python3 -m http.server 3000 --bind 127.0.0.1
+
+frontend-test: ## Run frontend unit tests with the Node test runner
+	cd frontend && node --test
