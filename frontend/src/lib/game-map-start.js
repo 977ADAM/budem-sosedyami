@@ -209,8 +209,10 @@ function renderChat() {
 function buildAgentHistory(personId, currentQuestionId) {
   const person = people[personId];
   const history = [];
-  for (const question of person.questions) {
-    if (!state.choices[personId].has(question.id) || question.id === currentQuestionId) continue;
+  for (const questionId of state.choices[personId]) {
+    if (questionId === currentQuestionId) continue;
+    const question = person.questions.find((item) => item.id === questionId);
+    if (!question) continue;
     history.push({ role: "user", content: question.label });
     const answer = state.answers[personId][question.id];
     if (answer) history.push({ role: "assistant", content: answer });
