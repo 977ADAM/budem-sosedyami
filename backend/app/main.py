@@ -49,6 +49,13 @@ async def chat(request: ChatRequest) -> ChatResponse:
     if question is None:
         raise HTTPException(status_code=422, detail="Unknown question for this agent")
 
+    allowed_history_questions = {item["text"] for item in agent["questions"].values()}
+    if any(
+        message.role == "user" and message.content not in allowed_history_questions
+        for message in request.history
+    ):
+        raise HTTPException(status_code=422, detail="History contains a non-demo question")
+
     api_key = os.getenv("DEEPSEEK_API_KEY", "").strip()
     if not api_key:
         raise HTTPException(status_code=503, detail="DeepSeek API key is not configured")

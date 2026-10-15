@@ -81,7 +81,7 @@ const people = {
   }
 };
 
-const state = { screen: "neighbors", activePerson: "anton", selectedPerson: null, choices: Object.fromEntries(Object.keys(people).map((id) => [id, new Set()])) };
+const state = { screen: "neighbors", activePerson: "anton", selectedPerson: null, choices: Object.fromEntries(Object.keys(people).map((id) => [id, new Set()])), answers: Object.fromEntries(Object.keys(people).map((id) => [id, {}])), pendingQuestion: null };
 const MATCH_GOAL = 3;
 const $ = (s, root = document) => root.querySelector(s);
 const $$ = (s, root = document) => [...root.querySelectorAll(s)];
@@ -168,6 +168,7 @@ function showScreen(name) {
   if (name === "reveal") renderReveal();
 }
 function showToast(message) { const toast = $("#toast"); toast.textContent = message; toast.classList.add("visible"); clearTimeout(showToast.timer); showToast.timer = setTimeout(() => toast.classList.remove("visible"), 2400); }
+function escapeHtml(value) { return String(value).replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;", "'": "&#39;" })[char]); }
 
 function renderNeighbors() {
   const found = Math.min(answeredCount(), MATCH_GOAL);
@@ -185,9 +186,10 @@ function renderNeighbors() {
 function chatHistory(personId) {
   const person = people[personId];
   const asked = state.choices[personId];
-  const greeting = `<div class="message"><small>${person.name.toUpperCase()} · СЕЙЧАС</small>${person.intro}</div>`;
-  const replies = person.questions.filter((q) => asked.has(q.id)).map((q) => `<div class="message user"><small>ВЫ СПРОСИЛИ</small>${q.label}</div><div class="message"><small>${person.name.toUpperCase()}</small>${q.answer}</div>`).join("");
-  return greeting + replies;
+  const greeting = `<div class="message"><small>${person.name.toUpperCase()} · СЕЙЧАС</small>${escapeHtml(person.intro)}</div>`;
+  const replies = person.questions.filter((q) => asked.has(q.id)).map((q) => `<div class="message user"><small>ВЫ СПРОСИЛИ</small>${escapeHtml(q.label)}</div><div class="message"><small>${person.name.toUpperCase()}</small>${escapeHtml(state.answers[personId][q.id] || q.answer)}</div>`).join("");
+  const pending = state.pendingQuestion?.agentId === personId ? `<div class="message" role="status"><small>${person.name.toUpperCase()}</small>Подбираю ответ…</div>` : "";
+  return greeting + replies + pending;
 }
 function renderChat() {
   const person = people[state.activePerson];
@@ -196,12 +198,56 @@ function renderChat() {
   $("#chat-name-label").textContent = person.name;
   $("#chat-profile-mini").innerHTML = `${miniAvatar(person.id)}<div><strong>${person.name}, ${person.age}</strong><span>${person.role}</span></div>`;
   $("#chat-messages").innerHTML = chatHistory(person.id);
-  $("#question-options").innerHTML = person.questions.map((q) => `<button class="question-chip" data-action="question" data-question="${q.id}" ${asked.has(q.id) ? "disabled" : ""}>${asked.has(q.id) ? "✓ " : "+ "}${q.label}</button>`).join("");
+  $("#question-options").innerHTML = person.questions.map((q) => `<button class="question-chip" data-action="question" data-question="${q.id}" ${asked.has(q.id) || state.pendingQuestion ? "disabled" : ""}>${asked.has(q.id) ? "✓ " : "+ "}${escapeHtml(q.label)}</button>`).join("");
   const found = Math.min(answeredCount(), MATCH_GOAL);
   $("#chat-progress-label").textContent = "СОВПАДЕНИЯ НАЙДЕНЫ";
   $("#chat-progress-count").textContent = `${found} / ${MATCH_GOAL}`;
   $("#chat-progress-bar").style.width = `${found / MATCH_GOAL * 100}%`;
   $("#chat-messages").scrollTop = $("#chat-messages").scrollHeight;
+}
+
+function buildAgentHistory(personId, currentQuestionId) {
+  const person = people[personId];
+  const history = [];
+  for (const question of person.questions) {
+    if (!state.choices[personId].has(question.id) || question.id === currentQuestionId) continue;
+    history.push({ role: "user", content: question.label });
+    const answer = state.answers[personId][question.id];
+    if (answer) history.push({ role: "assistant", content: answer });
+  }
+  return history;
+}
+
+async function askQuestion(personId, question) {
+  state.choices[personId].add(question.id);
+  const pending = { agentId: personId, questionId: question.id };
+  state.pendingQuestion = pending;
+  renderNeighbors();
+  if (state.screen === "chat" && state.activePerson === personId) renderChat();
+  if (answeredCount() === MATCH_GOAL) showToast("Три совпадения найдены — цель выполнена!");
+  let fallback = false;
+  let cancelled = false;
+  try {
+    const response = await fetch("/api/chat", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ agent_id: personId, question_id: question.id, history: buildAgentHistory(personId, question.id) })
+    });
+    if (!response.ok) throw new Error("Backend returned an error");
+    const data = await response.json();
+    if (typeof data.reply !== "string" || !data.reply.trim()) throw new Error("Backend returned an empty reply");
+    if (state.pendingQuestion !== pending) return;
+    state.answers[personId][question.id] = data.reply.trim();
+  } catch {
+    fallback = true;
+  } finally {
+    if (state.pendingQuestion === pending) {
+      state.pendingQuestion = null;
+      renderNeighbors();
+      if (state.screen === "chat" && state.activePerson === personId) renderChat();
+    } else cancelled = true;
+  }
+  if (fallback && !cancelled) showToast("ИИ сейчас недоступен — показан ответ из демо");
 }
 
 function renderChoice() {
@@ -249,17 +295,13 @@ document.addEventListener("click", (event) => {
   const target = event.target.closest("[data-action]");
   if (!target) return;
   const action = target.dataset.action;
-  if (action === "home" || action === "restart") { Object.values(state.choices).forEach((set) => set.clear()); state.selectedPerson = null; state.activePerson = "anton"; closeModal(); showScreen("neighbors"); }
+  if (action === "home" || action === "restart") { Object.values(state.choices).forEach((set) => set.clear()); Object.values(state.answers).forEach((answers) => Object.keys(answers).forEach((id) => delete answers[id])); state.pendingQuestion = null; state.selectedPerson = null; state.activePerson = "anton"; closeModal(); showScreen("neighbors"); }
   if (action === "start") showScreen("neighbors");
   if (action === "chat") { state.activePerson = target.dataset.person; showScreen("chat"); }
   if (action === "question") {
     const person = people[state.activePerson];
     const q = person.questions.find((item) => item.id === target.dataset.question);
-    if (q && !state.choices[person.id].has(q.id)) {
-      state.choices[person.id].add(q.id);
-      renderChat();
-      if (answeredCount() === MATCH_GOAL) showToast("Три совпадения найдены — цель выполнена!");
-    }
+    if (q && !state.pendingQuestion && !state.choices[person.id].has(q.id)) askQuestion(person.id, q);
   }
   if (action === "neighbors") showScreen("neighbors");
   if (action === "to-choice") {
