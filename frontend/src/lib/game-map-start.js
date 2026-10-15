@@ -298,7 +298,7 @@ function renderMapAgents() {
   layer.innerHTML = Object.values(people)
     .map(
       (person) =>
-        `<div class="map-home map-home-${person.id}" aria-hidden="true"><span>${person.project}</span></div><button type="button" class="map-agent-marker ${person.id}" data-action="chat" data-person="${person.id}" aria-label="Открыть диалог с ${person.name}, соседом"><span class="map-marker-avatar">${portrait(person.id)}</span><i aria-hidden="true"></i><span class="map-marker-label"><strong>${person.name}</strong><small>ЖК «${person.project}»</small></span></button>`,
+        `<div class="map-home map-home-${person.id}" aria-hidden="true"><span>Дом соседа</span></div><button type="button" class="map-agent-marker ${person.id}" data-action="chat" data-person="${person.id}" aria-label="Открыть диалог с ${person.name}, соседом"><span class="map-marker-avatar">${portrait(person.id)}</span><i aria-hidden="true"></i><span class="map-marker-label"><strong>${person.name}</strong><small>Сосед рядом</small></span></button>`,
     )
     .join("");
   $$(".map-agent-marker svg", layer).forEach((svg) => {
