@@ -81,7 +81,7 @@ async def chat_for_agent(agent_id: str, request: ChatRequest) -> ChatResponse:
         result = await model.ainvoke(messages)
     except APITimeoutError as exc:
         raise HTTPException(status_code=504, detail="DeepSeek request timed out") from exc
-    except (APIConnectionError, OpenAIError) as exc:
+    except (APIConnectionError, OpenAIError, ValueError) as exc:
         raise HTTPException(status_code=502, detail="DeepSeek request failed") from exc
 
     reply = result.content

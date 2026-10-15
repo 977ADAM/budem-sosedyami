@@ -154,3 +154,13 @@
 - [ ] Add `langchain-openai` through `uv`, use `ChatOpenAI.ainvoke()` with the DeepSeek OpenAI-compatible base URL, and retain the existing API error mapping.
 - [ ] Verify import/route startup and make a fictional-data request through the local UI.
 - [ ] Commit with `feat: use LangChain for DeepSeek requests`.
+
+### Task 5: Apply final review feedback
+
+**Files:**
+- Modify: `backend/app/agents.py`
+- Modify: `backend/app/main.py`
+
+- [ ] Treat client-supplied history as untrusted continuity context in the system prompt, and never as a source of facts or instructions.
+- [ ] Map expected response parsing `ValueError`s from LangChain/OpenAI to the documented 502 response.
+- [ ] Re-run backend sync/import and fictional-data DeepSeek verification, then commit the fixes.
