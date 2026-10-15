@@ -140,7 +140,7 @@
           <p class="eyebrow"><span class="eyebrow-line"></span>ВАШ РАЗГОВОР</p>
           <h2 id="chat-title">Познакомимся<br /><em>поближе?</em></h2>
           <p class="chat-aside-copy">
-            Выберите вопрос, который вам интересен. Сосед расскажет о своей повседневной жизни.
+            Выберите готовый вопрос или напишите свой — сосед ответит в рамках своей демо-истории.
           </p>
           <div class="chat-profile-mini" id="chat-profile-mini"></div>
           <div class="chat-progress">
@@ -157,8 +157,29 @@
           </div>
           <div class="chat-messages" id="chat-messages" aria-live="polite"></div>
           <div class="question-area">
-            <p>О чём спросим?</p>
+            <p>Выберите вопрос или напишите свой</p>
             <div class="question-options" id="question-options"></div>
+            <div class="chat-compose" id="chat-compose">
+              <label class="visually-hidden" for="chat-input">Ваш вопрос соседу</label>
+              <textarea
+                id="chat-input"
+                name="message"
+                maxlength="500"
+                rows="2"
+                placeholder="Напишите сообщение…"></textarea>
+              <button
+                class="button button-dark"
+                type="button"
+                data-action="send-message"
+                id="chat-send"
+              >
+                Отправить
+              </button>
+              <small class="chat-privacy-note"
+                >Ответ основан на вымышленной истории соседа. Не вводите личные данные — сообщение
+                отправится в DeepSeek.</small
+              >
+            </div>
           </div>
           <div class="chat-card-foot">
             <button class="text-button" data-action="neighbors"

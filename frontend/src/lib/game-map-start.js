@@ -268,7 +268,7 @@ const state = {
   activePerson: "anton",
   selectedPerson: null,
   choices: Object.fromEntries(Object.keys(people).map((id) => [id, new Set()])),
-  answers: Object.fromEntries(Object.keys(people).map((id) => [id, {}])),
+  conversations: Object.fromEntries(Object.keys(people).map((id) => [id, []])),
   dialogueRevisions: Object.fromEntries(Object.keys(people).map((id) => [id, 0])),
   pendingQuestion: null,
 };
@@ -423,20 +423,18 @@ function renderNeighbors() {
 
 function chatHistory(personId) {
   const person = people[personId];
-  const asked = state.choices[personId];
   const greeting = `<div class="message"><small>${person.name.toUpperCase()} · СЕЙЧАС</small>${escapeHtml(person.intro)}</div>`;
-  const replies = person.questions
-    .filter((q) => asked.has(q.id))
-    .map(
-      (q) =>
-        `<div class="message user"><small>ВЫ СПРОСИЛИ</small>${escapeHtml(q.label)}</div><div class="message"><small>${person.name.toUpperCase()}</small>${escapeHtml(state.answers[personId][q.id] || q.answer)}</div>`,
-    )
+  const turns = state.conversations[personId]
+    .map((turn) => {
+      const userMessage = `<div class="message user"><small>ВЫ</small>${escapeHtml(turn.message)}</div>`;
+      if (turn.reply)
+        return `${userMessage}<div class="message"><small>${person.name.toUpperCase()}</small>${escapeHtml(turn.reply)}</div>`;
+      if (turn.error)
+        return `${userMessage}<div class="message" role="status"><small>${person.name.toUpperCase()}</small>${escapeHtml(turn.error)}</div>`;
+      return `${userMessage}<div class="message" role="status"><small>${person.name.toUpperCase()}</small>Подбираю ответ…</div>`;
+    })
     .join("");
-  const pending =
-    state.pendingQuestion?.agentId === personId
-      ? `<div class="message" role="status"><small>${person.name.toUpperCase()}</small>Подбираю ответ…</div>`
-      : "";
-  return greeting + replies + pending;
+  return greeting + turns;
 }
 function renderChat() {
   const person = people[state.activePerson];
@@ -452,6 +450,8 @@ function renderChat() {
         `<button class="question-chip" data-action="question" data-question="${q.id}" ${asked.has(q.id) || state.pendingQuestion ? "disabled" : ""}>${asked.has(q.id) ? "✓ " : "+ "}${escapeHtml(q.label)}</button>`,
     )
     .join("");
+  $("#chat-input").disabled = Boolean(state.pendingQuestion);
+  $("#chat-send").disabled = Boolean(state.pendingQuestion);
   const found = Math.min(answeredCount(), MATCH_GOAL);
   $("#chat-progress-label").textContent = "СОВПАДЕНИЯ НАЙДЕНЫ";
   $("#chat-progress-count").textContent = `${found} / ${MATCH_GOAL}`;
@@ -459,31 +459,34 @@ function renderChat() {
   $("#chat-messages").scrollTop = $("#chat-messages").scrollHeight;
 }
 
-async function askQuestion(personId, question) {
-  const history = [...state.choices[personId]]
-    .filter((questionId) => questionId !== question.id)
-    .map((questionId) => {
-      const previousQuestion = people[personId].questions.find((item) => item.id === questionId);
-      return {
-        question_id: questionId,
-        reply: state.answers[personId][questionId] || previousQuestion.answer,
-      };
-    });
-  state.choices[personId].add(question.id);
+async function askMessage(personId, message, question = null) {
+  const history = state.conversations[personId]
+    .filter((turn) => turn.reply)
+    .slice(-10)
+    .map(({ message, reply }) => ({ message, reply }));
+  const turn = { message, reply: null, error: null };
+  state.conversations[personId].push(turn);
+  if (question) state.choices[personId].add(question.id);
   const revision = ++state.dialogueRevisions[personId];
-  const pending = { agentId: personId, questionId: question.id };
+  const pending = { agentId: personId, questionId: question?.id ?? null, turn };
   state.pendingQuestion = pending;
   renderNeighbors();
   if (state.screen === "chat" && state.activePerson === personId) renderChat();
-  if (answeredCount() === MATCH_GOAL) showToast("Три совпадения найдены — цель выполнена!");
+  if (question && answeredCount() === MATCH_GOAL)
+    showToast("Три совпадения найдены — цель выполнена!");
   let fallback = false;
   let cancelled = false;
   try {
-    const reply = await askAgent(personId, question.id, history);
+    const reply = await askAgent(personId, message, history);
     if (state.pendingQuestion !== pending || revision !== state.dialogueRevisions[personId]) return;
-    state.answers[personId][question.id] = reply;
+    turn.reply = reply;
   } catch {
-    fallback = true;
+    if (question) {
+      turn.reply = question.answer;
+      fallback = true;
+    } else {
+      turn.error = "ИИ сейчас недоступен. Попробуйте отправить сообщение ещё раз.";
+    }
   } finally {
     if (state.pendingQuestion === pending) {
       state.pendingQuestion = null;
@@ -574,9 +577,7 @@ document.addEventListener("click", (event) => {
   const action = target.dataset.action;
   if (action === "home" || action === "restart") {
     Object.values(state.choices).forEach((set) => set.clear());
-    Object.values(state.answers).forEach((answers) =>
-      Object.keys(answers).forEach((id) => delete answers[id]),
-    );
+    Object.values(state.conversations).forEach((turns) => turns.splice(0));
     Object.keys(state.dialogueRevisions).forEach((id) => state.dialogueRevisions[id]++);
     state.pendingQuestion = null;
     state.selectedPerson = null;
@@ -593,7 +594,14 @@ document.addEventListener("click", (event) => {
     const person = people[state.activePerson];
     const q = person.questions.find((item) => item.id === target.dataset.question);
     if (q && !state.pendingQuestion && !state.choices[person.id].has(q.id))
-      askQuestion(person.id, q);
+      askMessage(person.id, q.label, q);
+  }
+  if (action === "send-message") {
+    const input = $("#chat-input");
+    const message = input.value.trim();
+    if (!message || state.pendingQuestion) return;
+    input.value = "";
+    askMessage(state.activePerson, message);
   }
   if (action === "neighbors") showScreen("neighbors");
   if (action === "to-choice") {
@@ -630,6 +638,10 @@ $("#modal").addEventListener("click", (event) => {
   if (event.target.id === "modal") closeModal();
 });
 document.addEventListener("keydown", (event) => {
+  if (event.key === "Enter" && !event.shiftKey && event.target.id === "chat-input") {
+    event.preventDefault();
+    $("#chat-send").click();
+  }
   if (event.key === "Escape" && !$("#modal").hidden) closeModal();
 });
 showScreen("neighbors");

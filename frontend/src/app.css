@@ -660,6 +660,49 @@ button {
   flex-wrap: wrap;
   gap: 7px;
 }
+.chat-compose {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  margin-top: 14px;
+}
+.chat-compose textarea {
+  width: 100%;
+  min-height: 48px;
+  padding: 11px 12px;
+  border: 1px solid #d9ded3;
+  border-radius: 4px;
+  background: var(--white);
+  color: var(--ink);
+  font: inherit;
+  font-size: 12px;
+  resize: vertical;
+}
+.chat-compose textarea:focus {
+  border-color: var(--ink-soft);
+  outline: 2px solid #49665d22;
+}
+.chat-compose .button {
+  min-height: 48px;
+  padding-inline: 15px;
+}
+.chat-privacy-note {
+  grid-column: 1 / -1;
+  color: var(--muted);
+  font-size: 9px;
+  line-height: 1.45;
+}
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
 .question-chip {
   max-width: 100%;
   padding: 9px 12px;

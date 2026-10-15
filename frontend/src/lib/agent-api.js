@@ -4,21 +4,15 @@ async function request(path, options) {
   return response.json();
 }
 
-const agentChatPaths = Object.freeze({
-  anton: "/api/agents/anton/chat",
-  marina: "/api/agents/marina/chat",
-  pavel: "/api/agents/pavel/chat",
-  vera: "/api/agents/vera/chat",
-});
+const agentIds = new Set(["anton", "marina", "pavel", "vera"]);
 
-export async function askAgent(agentId, questionId, history) {
-  const path = agentChatPaths[agentId];
-  if (!path) throw new Error("Unknown agent");
+export async function askAgent(agentId, message, history) {
+  if (!agentIds.has(agentId)) throw new Error("Unknown agent");
 
-  const data = await request(path, {
+  const data = await request(`/api/agents/${agentId}/chat`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ question_id: questionId, history }),
+    body: JSON.stringify({ message, history }),
   });
   if (typeof data.reply !== "string" || !data.reply.trim())
     throw new Error("Agent API returned an empty reply");

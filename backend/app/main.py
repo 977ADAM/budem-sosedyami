@@ -1,25 +1,71 @@
 """Локальный FastAPI API для демо-соседей."""
 
 import os
-from pathlib import Path
+from contextlib import asynccontextmanager
+from pathlib import Path as FilePath
+from typing import AsyncIterator, Literal
+
 from dotenv import load_dotenv
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Path, Request
+from fastapi.middleware.cors import CORSMiddleware
 from langchain_openai import ChatOpenAI
 from openai import APIConnectionError, APITimeoutError, OpenAIError
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from app.agents import AGENTS, build_system_prompt
+from app.agents import build_system_prompt
 
-load_dotenv(Path(__file__).resolve().parents[1] / ".env")
+load_dotenv(FilePath(__file__).resolve().parents[1] / ".env")
 
-app = FastAPI(title="Локальные ИИ-соседи", version="0.1.0")
 DEEPSEEK_BASE_URL = "https://api.deepseek.com"
+
+AgentId = Literal["anton", "marina", "pavel", "vera"]
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+    api_key = os.getenv("DEEPSEEK_API_KEY", "").strip()
+    app.state.model = (
+        ChatOpenAI(
+            model=os.getenv("DEEPSEEK_MODEL", "deepseek-flash"),
+            api_key=api_key,
+            base_url=DEEPSEEK_BASE_URL,
+            timeout=30.0,
+            max_retries=0,
+        )
+        if api_key
+        else None
+    )
+    try:
+        yield
+    finally:
+        model = app.state.model
+        async_client = getattr(model, "root_async_client", None)
+        if async_client is not None:
+            await async_client.close()
+        app.state.model = None
+
+
+app = FastAPI(title="Локальные ИИ-соседи", version="0.1.0", lifespan=lifespan)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://127.0.0.1:3000", "http://127.0.0.1:5173"],
+    allow_methods=["POST", "GET"],
+    allow_headers=["*"],
+)
 
 
 class HistoryTurn(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    question_id: str = Field(min_length=1)
+    message: str = Field(min_length=1, max_length=500)
     reply: str = Field(min_length=1, max_length=800)
+
+    @field_validator("message")
+    @classmethod
+    def trim_message(cls, message: str) -> str:
+        message = message.strip()
+        if not message:
+            raise ValueError("Message must not be blank")
+        return message
 
     @field_validator("reply")
     @classmethod
@@ -32,8 +78,16 @@ class HistoryTurn(BaseModel):
 
 class ChatRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    question_id: str = Field(min_length=1)
-    history: list[HistoryTurn] = Field(max_length=3)
+    message: str = Field(min_length=1, max_length=500)
+    history: list[HistoryTurn] = Field(max_length=10)
+
+    @field_validator("message")
+    @classmethod
+    def trim_message(cls, message: str) -> str:
+        message = message.strip()
+        if not message:
+            raise ValueError("Message must not be blank")
+        return message
 
 
 class ChatResponse(BaseModel):
@@ -45,39 +99,19 @@ async def health() -> dict[str, str]:
     return {"status": "ok"}
 
 
-async def chat_for_agent(agent_id: str, request: ChatRequest) -> ChatResponse:
-    agent = AGENTS[agent_id]
-    question = agent["questions"].get(request.question_id)
-    if question is None:
-        raise HTTPException(status_code=422, detail="Unknown question for this agent")
-
+async def chat_for_agent(
+    agent_id: AgentId, request: ChatRequest, model: ChatOpenAI | None
+) -> ChatResponse:
     messages = [("system", build_system_prompt(agent_id))]
-    seen_question_ids: set[str] = set()
     for turn in request.history:
-        history_question = agent["questions"].get(turn.question_id)
-        if (
-            history_question is None
-            or turn.question_id == request.question_id
-            or turn.question_id in seen_question_ids
-        ):
-            raise HTTPException(status_code=422, detail="Invalid dialogue history")
-        seen_question_ids.add(turn.question_id)
-        messages.append(("user", history_question["text"]))
+        messages.append(("user", turn.message))
         messages.append(("assistant", turn.reply))
-    messages.append(("user", question["text"]))
+    messages.append(("user", request.message))
 
-    api_key = os.getenv("DEEPSEEK_API_KEY", "").strip()
-    if not api_key:
+    if model is None:
         raise HTTPException(status_code=503, detail="DeepSeek API key is not configured")
 
     try:
-        model = ChatOpenAI(
-            model=os.getenv("DEEPSEEK_MODEL", "deepseek-flash"),
-            api_key=api_key,
-            base_url=DEEPSEEK_BASE_URL,
-            timeout=30.0,
-            max_retries=0,
-        )
         result = await model.ainvoke(messages)
     except APITimeoutError as exc:
         raise HTTPException(status_code=504, detail="DeepSeek request timed out") from exc
@@ -91,21 +125,10 @@ async def chat_for_agent(agent_id: str, request: ChatRequest) -> ChatResponse:
     return ChatResponse(reply=reply)
 
 
-@app.post("/api/agents/anton/chat", response_model=ChatResponse)
-async def chat_anton(request: ChatRequest) -> ChatResponse:
-    return await chat_for_agent("anton", request)
-
-
-@app.post("/api/agents/marina/chat", response_model=ChatResponse)
-async def chat_marina(request: ChatRequest) -> ChatResponse:
-    return await chat_for_agent("marina", request)
-
-
-@app.post("/api/agents/pavel/chat", response_model=ChatResponse)
-async def chat_pavel(request: ChatRequest) -> ChatResponse:
-    return await chat_for_agent("pavel", request)
-
-
-@app.post("/api/agents/vera/chat", response_model=ChatResponse)
-async def chat_vera(request: ChatRequest) -> ChatResponse:
-    return await chat_for_agent("vera", request)
+@app.post("/api/agents/{agent_id}/chat", response_model=ChatResponse)
+async def chat(
+    http_request: Request,
+    chat_request: ChatRequest,
+    agent_id: AgentId = Path(description="ID вымышленного соседа"),
+) -> ChatResponse:
+    return await chat_for_agent(agent_id, chat_request, http_request.app.state.model)
