@@ -1,4 +1,4 @@
-import { askAgent, loadDialogue, resetDialogues } from "./agent-api.js";
+import { askAgent } from "./agent-api.js";
 
 const people = {
   anton: {
@@ -383,7 +383,6 @@ function showScreen(name) {
   }
   if (name === "chat") {
     renderChat();
-    refreshDialogue(state.activePerson);
   }
   if (name === "choice") renderChoice();
   if (name === "reveal") renderReveal();
@@ -460,19 +459,16 @@ function renderChat() {
   $("#chat-messages").scrollTop = $("#chat-messages").scrollHeight;
 }
 
-async function refreshDialogue(personId) {
-  const revision = state.dialogueRevisions[personId];
-  try {
-    const answers = await loadDialogue(personId);
-    if (revision !== state.dialogueRevisions[personId]) return;
-    state.answers[personId] = answers;
-    if (state.screen === "chat" && state.activePerson === personId) renderChat();
-  } catch {
-    // Static demo answers remain visible when the backend is unavailable.
-  }
-}
-
 async function askQuestion(personId, question) {
+  const history = [...state.choices[personId]]
+    .filter((questionId) => questionId !== question.id)
+    .map((questionId) => {
+      const previousQuestion = people[personId].questions.find((item) => item.id === questionId);
+      return {
+        question_id: questionId,
+        reply: state.answers[personId][questionId] || previousQuestion.answer,
+      };
+    });
   state.choices[personId].add(question.id);
   const revision = ++state.dialogueRevisions[personId];
   const pending = { agentId: personId, questionId: question.id };
@@ -483,7 +479,7 @@ async function askQuestion(personId, question) {
   let fallback = false;
   let cancelled = false;
   try {
-    const reply = await askAgent(personId, question.id);
+    const reply = await askAgent(personId, question.id, history);
     if (state.pendingQuestion !== pending || revision !== state.dialogueRevisions[personId]) return;
     state.answers[personId][question.id] = reply;
   } catch {
@@ -587,7 +583,6 @@ document.addEventListener("click", (event) => {
     state.activePerson = "anton";
     closeModal();
     showScreen("neighbors");
-    resetDialogues().catch(() => showToast("Не удалось очистить историю на backend"));
   }
   if (action === "start") showScreen("neighbors");
   if (action === "chat") {
