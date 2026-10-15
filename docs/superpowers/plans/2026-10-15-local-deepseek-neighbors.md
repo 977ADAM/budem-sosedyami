@@ -1,5 +1,7 @@
 # Локальные ИИ-соседи на DeepSeek — план реализации
 
+> **Superseded:** заменён планом, который будет составлен по `docs/superpowers/specs/2026-10-15-fastapi-local-agents-design.md` после утверждения этой спецификации.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Добавить локальные ответы DeepSeek для четырёх вымышленных соседей, сохранив игру про готовые вопросы и fallback на демо-ответы.

@@ -1,4 +1,6 @@
-# Локальные ИИ-соседи на DeepSeek — дизайн прототипа
+# Superseded: локальные ИИ-соседи через Vite proxy
+
+Эта версия заменена архитектурой FastAPI и каталогами `frontend/` + `backend/`. Актуальная спецификация: [2026-10-15-fastapi-local-agents-design.md](2026-10-15-fastapi-local-agents-design.md).
 
 ## Цель
 
