@@ -1,4 +1,4 @@
-import { askAgent } from "./agent-api.js";
+import { askAgent, clearSession, getAgentHistory, startSession } from "./agent-api.js";
 
 const people = {
   anton: {
@@ -460,10 +460,6 @@ function renderChat() {
 }
 
 async function askMessage(personId, message, question = null) {
-  const history = state.conversations[personId]
-    .filter((turn) => turn.reply)
-    .slice(-10)
-    .map(({ message, reply }) => ({ message, reply }));
   const turn = { message, reply: null, error: null };
   state.conversations[personId].push(turn);
   if (question) state.choices[personId].add(question.id);
@@ -477,7 +473,7 @@ async function askMessage(personId, message, question = null) {
   let fallback = false;
   let cancelled = false;
   try {
-    const reply = await askAgent(personId, message, history);
+    const reply = await askAgent(personId, message, question?.id ?? null);
     if (state.pendingQuestion !== pending || revision !== state.dialogueRevisions[personId]) return;
     turn.reply = reply;
   } catch {
@@ -576,6 +572,7 @@ document.addEventListener("click", (event) => {
   if (!target) return;
   const action = target.dataset.action;
   if (action === "home" || action === "restart") {
+    clearSession().catch(() => showToast("Не удалось очистить историю диалога"));
     Object.values(state.choices).forEach((set) => set.clear());
     Object.values(state.conversations).forEach((turns) => turns.splice(0));
     Object.keys(state.dialogueRevisions).forEach((id) => state.dialogueRevisions[id]++);
@@ -644,4 +641,22 @@ document.addEventListener("keydown", (event) => {
   }
   if (event.key === "Escape" && !$("#modal").hidden) closeModal();
 });
-showScreen("neighbors");
+async function initializeAgentSession() {
+  try {
+    await startSession();
+    const histories = await Promise.all(
+      Object.keys(people).map(async (personId) => [personId, await getAgentHistory(personId)]),
+    );
+    for (const [personId, turns] of histories) {
+      state.conversations[personId] = turns;
+      for (const turn of turns) {
+        if (turn.question_id) state.choices[personId].add(turn.question_id);
+      }
+    }
+  } catch {
+    showToast("Не удалось загрузить историю диалогов");
+  }
+  showScreen("neighbors");
+}
+
+initializeAgentSession();
