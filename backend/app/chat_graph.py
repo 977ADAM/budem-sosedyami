@@ -8,6 +8,7 @@ from typing import Any, Literal, TypedDict
 from uuid import UUID
 
 from langchain_core.messages import AIMessage, HumanMessage, RemoveMessage, SystemMessage
+from langchain_core.runnables import RunnableConfig
 from langgraph.checkpoint.base import BaseCheckpointSaver
 from langgraph.graph import END, START, MessagesState, StateGraph
 from langgraph.graph.message import REMOVE_ALL_MESSAGES
@@ -26,7 +27,7 @@ class ChatTurn(TypedDict):
 
 
 def build_chat_graph(model: Any, checkpointer: BaseCheckpointSaver) -> Pregel:
-    async def call_model(state: MessagesState, config: dict[str, Any]) -> dict[str, list]:
+    async def call_model(state: MessagesState, config: RunnableConfig) -> dict[str, list]:
         agent_id: AgentId = config["configurable"]["agent_id"]
         result = await model.ainvoke(
             [SystemMessage(content=build_system_prompt(agent_id)), *state["messages"]]
