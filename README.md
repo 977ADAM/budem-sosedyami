@@ -19,11 +19,10 @@
 
 ```sh
 cd backend
-uv venv
-uv pip install --python .venv/bin/python -r requirements.txt
+uv sync
 cp .env.example .env
 # Добавьте DEEPSEEK_API_KEY в backend/.env для ответов модели.
-uv run --python .venv/bin/python uvicorn app.main:app --reload --port 8000 --env-file .env
+uv run uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
 ```
 
 Backend доступен локально на `http://127.0.0.1:8000`; проверка состояния: `/health`.
