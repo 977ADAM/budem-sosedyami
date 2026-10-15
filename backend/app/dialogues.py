@@ -14,7 +14,7 @@ DIALOGUE_GENERATIONS: dict[str, int] = {}
 
 
 def generation(agent_id: str) -> int:
-    return DIALOGUE_GENERATIONS.get(agent_id, 0)
+    return DIALOGUE_GENERATIONS.setdefault(agent_id, 0)
 
 
 def append_turn(agent_id: str, turn: DialogueTurn, request_generation: int) -> bool:
