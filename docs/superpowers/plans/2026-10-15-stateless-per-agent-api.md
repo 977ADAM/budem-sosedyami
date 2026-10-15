@@ -4,9 +4,9 @@
 
 **Goal:** Remove backend dialogue storage and expose a stateless chat endpoint for each fictional agent while preserving in-page conversational context.
 
-**Architecture:** FastAPI defines four explicit route wrappers over one shared stateless chat function. Each request carries the current prepared question ID and the earlier turns from the frontend; the backend resolves question text from its fixed agent registry, calls DeepSeek, and returns one reply without retaining session state. The frontend keeps game progress and reply history only in page memory.
+**Architecture:** FastAPI defines four explicit route wrappers over one shared stateless chat function. Each request carries the current prepared question ID and the earlier turns from the frontend; the backend resolves question text from its fixed agent registry, invokes DeepSeek through LangChain's `ChatOpenAI` integration configured for DeepSeek's OpenAI-compatible API, and returns one reply without retaining session state. The frontend keeps game progress and reply history only in page memory.
 
-**Tech Stack:** Python 3.14, FastAPI, Pydantic, HTTPX, uv, SvelteKit, vanilla JavaScript.
+**Tech Stack:** Python 3.14, FastAPI, Pydantic, LangChain `langchain-openai`, uv, SvelteKit, vanilla JavaScript.
 
 **Spec:** `docs/superpowers/specs/2026-10-15-stateless-agent-endpoints-design.md`
 
@@ -30,7 +30,7 @@
 
 ## File Map
 
-- `backend/app/main.py`: own Pydantic request models, four explicit agent routes, shared validation and DeepSeek call. No dialogue data is stored here.
+- `backend/app/main.py`: own Pydantic request models, four explicit agent routes, shared validation and LangChain DeepSeek call. No dialogue data is stored here.
 - `backend/app/dialogues.py`: remove this process-local store module.
 - `frontend/src/lib/agent-api.js`: map known IDs to four fixed URLs and pass request history.
 - `frontend/src/lib/game-map-start.js`: assemble request-local history from the page's existing choices/answers; remove backend dialogue load/reset calls.
@@ -59,19 +59,23 @@
 
   Add a shared helper that checks the current question and every historical question against the route agent's fixed registry, rejects duplicate/history-current IDs with 422, and constructs ordered `user`/`assistant` messages. Only question text from `AGENTS` is used; history replies provide continuity but do not extend the system's allowed facts.
 
-- [ ] **Step 3: Add four explicit FastAPI route wrappers**
+- [ ] **Step 3: Invoke DeepSeek through LangChain**
+
+  Add `langchain-openai` with `uv`, configure `ChatOpenAI` with the DeepSeek-compatible base URL, `DEEPSEEK_API_KEY`, and `DEEPSEEK_MODEL`, then call it asynchronously with LangChain message objects. Preserve the existing 504 timeout and 502 upstream error semantics.
+
+- [ ] **Step 4: Add four explicit FastAPI route wrappers**
 
   Add `POST /api/agents/anton/chat`, `/marina/chat`, `/pavel/chat`, and `/vera/chat`. Each wrapper calls the shared handler with its fixed agent ID. Keep existing DeepSeek timeout/upstream error behavior and response model. Remove `/api/chat`, `GET /api/dialogue/{agent_id}`, `POST /api/dialogue/reset`, and all imports/calls to the dialogue store.
 
-- [ ] **Step 4: Remove the dialogue store module**
+- [ ] **Step 5: Remove the dialogue store module**
 
   Delete `backend/app/dialogues.py`; verify there are no remaining imports or `DIALOGUES` / generation references in backend source.
 
-- [ ] **Step 5: Manually verify backend request contract**
+- [ ] **Step 6: Manually verify backend request contract**
 
   From `backend/`, run `uv run uvicorn app.main:app --host 127.0.0.1 --port 8000`. Use local HTTP requests with fictional demo data to check health, successful first and follow-up requests, each of the four paths, 404 for an unknown path, and 422 for an unknown/current/duplicate question, missing history, invalid reply, and extra fields. Confirm responses do not create a dialogue retrieval/reset API or server-side history.
 
-- [ ] **Step 6: Commit the backend change**
+- [ ] **Step 7: Commit the backend change**
 
   ```bash
   git add backend/app/main.py backend/app/dialogues.py
@@ -137,3 +141,16 @@
   git add README.md backend/README.md
   git commit -m "docs: describe stateless per-agent API"
   ```
+
+### Task 4: Route DeepSeek calls through LangChain
+
+**Files:**
+- Modify: `backend/app/main.py`
+- Modify: `backend/pyproject.toml`
+- Modify: `backend/uv.lock`
+
+**User steering:** Added after Task 1: use LangChain for the backend.
+
+- [ ] Add `langchain-openai` through `uv`, use `ChatOpenAI.ainvoke()` with the DeepSeek OpenAI-compatible base URL, and retain the existing API error mapping.
+- [ ] Verify import/route startup and make a fictional-data request through the local UI.
+- [ ] Commit with `feat: use LangChain for DeepSeek requests`.

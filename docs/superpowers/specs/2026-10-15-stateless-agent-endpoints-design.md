@@ -10,6 +10,8 @@ and discards it when the request completes.
 
 The demo remains local, uses only its fictional profiles and prepared questions,
 and does not add persistence, free-text questions, or external integrations.
+Backend model calls use LangChain's `ChatOpenAI` integration pointed at
+DeepSeek's OpenAI-compatible API.
 
 ## API contract
 
@@ -43,7 +45,8 @@ The shared handler validates that all question IDs belong to the route's agent,
 that history has no duplicate/current question, and that each supplied reply is
 a non-empty bounded string. Extra request fields are rejected. It reconstructs
 question text from the server's fixed question registry, then sends the system
-prompt, earlier turns, and current prepared question to DeepSeek. It returns
+prompt, earlier turns, and current prepared question to DeepSeek through
+LangChain. It returns
 only the new reply and keeps no session state after responding. Client-supplied
 history is conversational context, not a source of facts: the system prompt
 remains authoritative and the model must not treat conflicting history as new
@@ -72,8 +75,9 @@ accept arbitrary route fragments. No free-text question input is introduced.
 ## Components and changes
 
 - `backend/app/main.py`: replace the generic `/api/chat` route with four thin
-  route functions that call a shared stateless chat handler; remove dialogue
-  retrieval and reset routes.
+  route functions that call a shared stateless chat handler; use LangChain's
+  `ChatOpenAI` integration with DeepSeek; remove dialogue retrieval and reset
+  routes.
 - `backend/app/dialogues.py`: delete process-local dialogue and generation
   storage.
 - `frontend/src/lib/agent-api.js`: call the explicit per-agent route and send
