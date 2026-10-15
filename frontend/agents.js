@@ -1,0 +1,13 @@
+/**
+ * UI-метаданные соседей: только идентификаторы и подписи для интерфейса.
+ * Факты о персонажах живут на backend (backend/app/agents.py) и в UI не дублируются.
+ */
+
+export const AGENTS = [
+  { id: "anton", name: "Антон", tagline: "продуктовый дизайнер, работает из дома" },
+  { id: "marina", name: "Марина", tagline: "редактор, мама первоклассницы" },
+  { id: "pavel", name: "Павел", tagline: "операционный менеджер, много ездит" },
+  { id: "vera", name: "Вера", tagline: "фотограф, гуляет по городу" },
+];
+
+export const AGENT_IDS = new Set(AGENTS.map((agent) => agent.id));

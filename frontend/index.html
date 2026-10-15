@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Будем соседями? — простой чат</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="titles">
+        <h1>Будем соседями?</h1>
+        <p class="subtitle">
+          Локальное демо: четыре вымышленных соседа отвечают через DeepSeek. Не вводи личные данные.
+        </p>
+      </div>
+      <button id="reset-button" class="ghost" type="button">Сбросить сессию</button>
+    </header>
+
+    <main class="layout">
+      <aside class="agents">
+        <h2>Соседи</h2>
+        <ul id="agent-list" class="agent-list"></ul>
+        <p id="status" class="status" role="status" aria-live="polite"></p>
+      </aside>
+
+      <section class="chat">
+        <ol id="chat-log" class="chat-log" aria-live="polite" aria-label="История диалога"></ol>
+
+        <form id="chat-form" class="composer" autocomplete="off">
+          <label class="sr-only" for="message-input">Сообщение соседу</label>
+          <input
+            id="message-input"
+            name="message"
+            type="text"
+            placeholder="Напиши соседу…"
+            maxlength="500"
+            required
+          />
+          <span id="counter" class="counter" aria-hidden="true">0/500</span>
+          <button id="send-button" type="submit">Отправить</button>
+        </form>
+      </section>
+    </main>
+
+    <script type="module" src="app.js"></script>
+  </body>
+</html>
