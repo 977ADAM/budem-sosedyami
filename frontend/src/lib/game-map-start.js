@@ -520,12 +520,14 @@ function getMatch(person) {
   const selectedTopics = asked
     .map((id) => person.questions.find((question) => question.id === id)?.topic)
     .filter(Boolean);
-  const latestTopic = selectedTopics[selectedTopics.length - 1];
+  const topics = [...new Set(selectedTopics)];
   const copy =
-    person.matchCopy[latestTopic] ||
-    person.matchCopy[selectedTopics[0]] ||
+    topics
+      .map((topic) => person.matchCopy[topic])
+      .filter(Boolean)
+      .join(" ") ||
     "Вы выбрали темы, которые важны именно для вашего ритма. В этой демо-истории можно представить, как повседневная жизнь складывается рядом с домом.";
-  return { topics: [...new Set(selectedTopics)], copy };
+  return { topics, copy };
 }
 
 function floorplan() {
