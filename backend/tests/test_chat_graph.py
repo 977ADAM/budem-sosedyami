@@ -1,10 +1,8 @@
 import unittest
 import warnings
 from unittest.mock import AsyncMock
-from uuid import uuid4
 
 from langchain_core.messages import AIMessage, SystemMessage
-from langgraph.checkpoint.memory import MemorySaver
 
 from app.chat_graph import build_chat_graph, invoke_chat
 
@@ -15,8 +13,8 @@ class ChatGraphTests(unittest.IsolatedAsyncioTestCase):
         model.ainvoke = AsyncMock(return_value=AIMessage(content="Ответ соседа."))
         with warnings.catch_warnings(record=True) as caught:
             warnings.simplefilter("always")
-            graph = build_chat_graph(model, MemorySaver())
-            reply = await invoke_chat(graph, uuid4(), "anton", "Где кофе?", "coffee")
+            graph = build_chat_graph(model)
+            reply = await invoke_chat(graph, "anton", "Где кофе?", [])
 
         self.assertEqual(reply, "Ответ соседа.")
         self.assertFalse(

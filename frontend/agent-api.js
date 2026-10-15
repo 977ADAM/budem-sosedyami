@@ -1,17 +1,10 @@
-/**
- * Тонкий клиент локального FastAPI backend.
- *
- * Backend отдаёт анонимную сессию в HttpOnly cookie, поэтому каждый запрос идёт
- * с `credentials: "include"`. История диалогов хранится на сервере (LangGraph
- * checkpoint), клиент передаёт только новое сообщение.
- */
+/** Stateless API: the caller owns conversation history. */
 
 import { AGENT_IDS } from "./agents.js";
 
 export const MAX_MESSAGE_LENGTH = 500;
 
 const STATUS_MESSAGES = {
-  401: "Сессия истекла",
   422: "Сообщение пустое или длиннее " + MAX_MESSAGE_LENGTH + " символов",
   502: "Сосед не ответил: ошибка обращения к модели (502)",
   503: "Модель не настроена: на backend нет DEEPSEEK_API_KEY (503)",
@@ -46,7 +39,7 @@ export function createAgentApi({ fetchImpl = globalThis.fetch, baseUrl = "" } = 
   async function request(path, options = {}) {
     let response;
     try {
-      response = await fetchImpl(`${baseUrl}${path}`, { ...options, credentials: "include" });
+      response = await fetchImpl(`${baseUrl}${path}`, { ...options, credentials: "omit" });
     } catch (cause) {
       throw new ApiError(
         "Backend недоступен: проверь, запущен ли uvicorn на 127.0.0.1:8000",
@@ -72,34 +65,7 @@ export function createAgentApi({ fetchImpl = globalThis.fetch, baseUrl = "" } = 
     return payload;
   }
 
-  async function startSession() {
-    return await request("/api/session", { method: "POST" });
-  }
-
-  async function resetSession() {
-    await request("/api/session", { method: "DELETE" });
-    return await startSession();
-  }
-
-  async function withSessionRetry(operation) {
-    try {
-      return await operation();
-    } catch (error) {
-      if (error instanceof ApiError && error.status === 401) {
-        await startSession();
-        return await operation();
-      }
-      throw error;
-    }
-  }
-
-  async function getHistory(agentId) {
-    requireAgent(agentId);
-    const data = await withSessionRetry(() => request(`/api/agents/${agentId}/history`));
-    return Array.isArray(data?.turns) ? data.turns : [];
-  }
-
-  async function sendMessage(agentId, message) {
+  async function sendMessage(agentId, message, turns = []) {
     requireAgent(agentId);
     const text = String(message ?? "").trim();
     if (!text) {
@@ -109,13 +75,15 @@ export function createAgentApi({ fetchImpl = globalThis.fetch, baseUrl = "" } = 
       throw new ApiError(`Сообщение длиннее ${MAX_MESSAGE_LENGTH} символов`, 422);
     }
 
-    const data = await withSessionRetry(() =>
-      request(`/api/agents/${agentId}/chat`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: text, question_id: null }),
-      }),
-    );
+    const history = turns
+      .filter((turn) => !turn.pending && !turn.error && typeof turn.reply === "string" && turn.reply.trim())
+      .slice(-100)
+      .map(({ message, reply }) => ({ message, reply }));
+    const data = await request(`/api/agents/${agentId}/chat`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ message: text, history }),
+    });
 
     const reply = typeof data?.reply === "string" ? data.reply.trim() : "";
     if (!reply) {
@@ -124,5 +92,5 @@ export function createAgentApi({ fetchImpl = globalThis.fetch, baseUrl = "" } = 
     return reply;
   }
 
-  return { startSession, resetSession, getHistory, sendMessage };
+  return { sendMessage };
 }

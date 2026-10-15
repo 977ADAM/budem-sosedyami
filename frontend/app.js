@@ -1,8 +1,7 @@
 /**
  * Состояние и рендер простого чата поверх локального FastAPI backend.
  *
- * Сервер владеет историей диалогов, поэтому UI только показывает ответы,
- * которые вернул backend, и не отправляет прошлые реплики.
+ * История живёт только в памяти вкладки и передаётся с каждым запросом.
  */
 
 import { MAX_MESSAGE_LENGTH, createAgentApi } from "./agent-api.js";
@@ -31,7 +30,6 @@ const elements = {
 const state = {
   agentId: AGENTS[0].id,
   turns: new Map(AGENTS.map((agent) => [agent.id, []])),
-  hydrated: new Set(),
   pending: false,
 };
 
@@ -120,24 +118,11 @@ function renderLog() {
   elements.log.scrollTop = elements.log.scrollHeight;
 }
 
-async function selectAgent(agentId) {
+function selectAgent(agentId) {
   if (agentId === state.agentId) return;
   state.agentId = agentId;
   renderAgentList();
   renderLog();
-  await loadHistory(agentId);
-}
-
-async function loadHistory(agentId) {
-  if (state.hydrated.has(agentId)) return;
-  try {
-    const turns = await api.getHistory(agentId);
-    state.turns.set(agentId, turns);
-    state.hydrated.add(agentId);
-    if (agentId === state.agentId) renderLog();
-  } catch (error) {
-    setStatus(error.message, "error");
-  }
 }
 
 async function onSubmit(event) {
@@ -159,7 +144,7 @@ async function onSubmit(event) {
   setStatus("Сосед печатает…");
 
   try {
-    const reply = await api.sendMessage(agentId, text);
+    const reply = await api.sendMessage(agentId, text, turns);
     turns[turns.length - 1] = { message: text, reply };
     setStatus("");
   } catch (error) {
@@ -174,27 +159,15 @@ async function onSubmit(event) {
   }
 }
 
-async function onReset() {
+function onReset() {
   if (state.pending) return;
-  if (!window.confirm("Сбросить сессию? Все диалоги с соседями будут удалены.")) return;
-
-  setPending(true);
-  setStatus("Сбрасываю сессию…");
-  try {
-    await api.resetSession();
-    for (const agentId of state.turns.keys()) state.turns.set(agentId, []);
-    state.hydrated.clear();
-    state.hydrated.add(state.agentId);
-    renderLog();
-    setStatus("Сессия сброшена", "ok");
-  } catch (error) {
-    setStatus(error.message, "error");
-  } finally {
-    setPending(false);
-  }
+  if (!window.confirm("Очистить все диалоги в этой вкладке?")) return;
+  for (const agentId of state.turns.keys()) state.turns.set(agentId, []);
+  renderLog();
+  setStatus("Диалоги очищены", "ok");
 }
 
-async function boot() {
+function boot() {
   elements.input.maxLength = MAX_MESSAGE_LENGTH;
   updateCounter();
   renderAgentList();
@@ -204,15 +177,6 @@ async function boot() {
   elements.reset.addEventListener("click", onReset);
   elements.input.addEventListener("input", updateCounter);
 
-  setStatus("Подключаюсь к backend…");
-  try {
-    await api.startSession();
-    setStatus("");
-  } catch (error) {
-    setStatus(error.message, "error");
-  }
-
-  await loadHistory(state.agentId);
   elements.input.focus();
 }
 

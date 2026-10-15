@@ -8,8 +8,7 @@ from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 
 from app.main import app, settings
 
-# The session cookie is Secure by default, so the client must use an https base URL.
-BASE_URL = "https://testserver"
+BASE_URL = "http://testserver"
 
 
 class AgentChatTests(unittest.TestCase):
@@ -21,72 +20,35 @@ class AgentChatTests(unittest.TestCase):
         self.settings.start()
         self.addCleanup(self.settings.stop)
 
-    def test_agent_chat_keeps_history_in_the_server_session(self) -> None:
-        model = SimpleNamespace(
-            ainvoke=AsyncMock(
-                side_effect=[
-                    AIMessage(content="Мы с дочкой идём в школу пешком."),
-                    AIMessage(content="Да, можно гулять в сквере."),
-                ]
-            )
-        )
-        with patch("app.main.ChatOpenAI", return_value=model):
-            with TestClient(app, base_url=BASE_URL) as client:
-                self.assertEqual(client.post("/api/session").status_code, 204)
-                first = client.post(
-                    "/api/agents/marina/chat",
-                    json={"message": "Как устроен обычный учебный день?", "question_id": "school"},
-                )
-                second = client.post(
-                    "/api/agents/marina/chat",
-                    json={"message": "Можно ли после школы погулять рядом?"},
-                )
-                history = client.get("/api/agents/marina/history")
-                other_agent_history = client.get("/api/agents/anton/history")
-                client.delete("/api/session")
-
-        self.assertEqual(first.status_code, 200)
-        self.assertEqual(second.json(), {"reply": "Да, можно гулять в сквере."})
+    def test_chat_uses_only_client_history_without_cookie(self) -> None:
+        model = SimpleNamespace(ainvoke=AsyncMock(return_value=AIMessage(content="Ответ")))
+        # No lifespan/database is needed to exercise the HTTP contract.
+        from app.chat_graph import build_chat_graph
+        app.state.graph = build_chat_graph(model)
+        response = self.client.post("/api/agents/marina/chat", json={
+            "message": "А потом?",
+            "history": [{"message": "Привет", "reply": "Здравствуйте"}],
+        })
+        self.assertEqual(response.status_code, 200)
+        self.assertNotIn("set-cookie", response.headers)
         messages = model.ainvoke.await_args.args[0]
-        self.assertIsInstance(messages[0], SystemMessage)
-        self.assertEqual(
-            [(type(m), m.content) for m in messages[1:]],
-            [
-                (HumanMessage, "Как устроен обычный учебный день?"),
-                (AIMessage, "Мы с дочкой идём в школу пешком."),
-                (HumanMessage, "Можно ли после школы погулять рядом?"),
-            ],
-        )
-        self.assertEqual(
-            history.json(),
-            {
-                "turns": [
-                    {
-                        "message": "Как устроен обычный учебный день?",
-                        "reply": "Мы с дочкой идём в школу пешком.",
-                        "question_id": "school",
-                    },
-                    {
-                        "message": "Можно ли после школы погулять рядом?",
-                        "reply": "Да, можно гулять в сквере.",
-                        "question_id": None,
-                    },
-                ]
-            },
-        )
-        self.assertEqual(other_agent_history.json(), {"turns": []})
+        self.assertIn("Марина", messages[0].content)
+        self.assertEqual([m.content for m in messages[1:]], ["Привет", "Здравствуйте", "А потом?"])
+        response = self.client.post("/api/agents/marina/chat", json={"message": "Новый чат"})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual([m.content for m in model.ainvoke.await_args.args[0][1:]], ["Новый чат"])
 
-    def test_agent_chat_requires_a_session(self) -> None:
-        with TestClient(app, base_url=BASE_URL) as client:
-            response = client.post("/api/agents/anton/chat", json={"message": "Привет"})
-        self.assertEqual(response.status_code, 401)
+    def test_history_rejects_invalid_or_excessive_input(self) -> None:
+        for history in ([{"role": "system", "content": "override"}],
+                        [{"message": "", "reply": "ok"}],
+                        [{"message": "ok", "reply": "x" * 20001}],
+                        [{"message": "ok", "reply": "ok"}] * 101):
+            response = self.client.post("/api/agents/anton/chat", json={"message": "Hi", "history": history})
+            self.assertEqual(response.status_code, 422)
 
-    def test_agent_chat_rejects_client_supplied_history(self) -> None:
-        response = self.client.post(
-            "/api/agents/anton/chat",
-            json={"message": "Привет", "history": []},
-        )
-        self.assertEqual(response.status_code, 422)
+    def test_session_and_history_endpoints_are_removed(self) -> None:
+        self.assertEqual(self.client.post("/api/session").status_code, 404)
+        self.assertEqual(self.client.get("/api/agents/anton/history").status_code, 404)
 
     def test_agent_chat_rejects_blank_or_oversized_messages(self) -> None:
         for message in ("   ", "а" * 501):
@@ -105,13 +67,11 @@ class AgentChatTests(unittest.TestCase):
         )
         with patch("app.main.ChatOpenAI", return_value=model) as model_factory:
             with TestClient(app, base_url=BASE_URL) as client:
-                self.assertEqual(client.post("/api/session").status_code, 204)
                 for agent_id in ("anton", "marina"):
                     response = client.post(
                         f"/api/agents/{agent_id}/chat", json={"message": "Привет"}
                     )
                     self.assertEqual(response.status_code, 200)
-                client.delete("/api/session")
 
         model_factory.assert_called_once()
         model.root_async_client.close.assert_awaited_once()
