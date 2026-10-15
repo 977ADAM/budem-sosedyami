@@ -4,9 +4,9 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite dev --host 0.0.0.0",
+    "dev": "vite dev --host 127.0.0.1",
     "build": "vite build",
-    "preview": "vite preview --host 0.0.0.0",
+    "preview": "vite preview --host 127.0.0.1",
     "lint": "eslint .",
     "format:check": "prettier --check .",
     "format": "prettier --write ."
