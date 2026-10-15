@@ -48,3 +48,15 @@ npm run build
 ```
 
 Статический сайт собирается в `frontend/dist/`. Backend предназначен для локальной демонстрации и не хранит историю разговоров.
+
+## Проверки frontend
+
+Из каталога `frontend/`:
+
+```sh
+npm run lint
+npm run format:check
+npm run build
+```
+
+Для автоматического форматирования файлов используйте `npm run format`.
