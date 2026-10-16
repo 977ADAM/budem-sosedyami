@@ -30,7 +30,6 @@ uv run uvicorn app.main:app --reload --no-access-log --host 127.0.0.1 --port 800
 | --- | --- |
 | `DEEPSEEK_API_KEY` | Пусто — чат возвращает 503 |
 | `DEEPSEEK_MODEL` | `deepseek-flash` |
-| `DEEPSEEK_BASE_URL` | Пусто — стандартный `https://api.deepseek.com/v1` из `langchain-deepseek`; задайте для прокси или шлюза |
 | `DEEPSEEK_MAX_TOKENS` | `1000` токенов ответа |
 | `DEEPSEEK_TIMEOUT_SECONDS` | `30`; держите меньше `proxy_read_timeout` (120 с) в [angie](../deploy/angie-sosedyami.locations.inc) |
 | `CONTEXT_SECRET` | Случайный ключ при старте |
