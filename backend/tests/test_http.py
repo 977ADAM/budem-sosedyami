@@ -68,8 +68,7 @@ class HttpApiTests(unittest.TestCase):
     def test_cors_allows_only_configured_origins(self) -> None:
         for origin, allowed in (
             ("http://127.0.0.1:3000", True),
-            ("http://127.0.0.1:5173", True),
-            ("http://localhost:3000", False),
+            ("http://localhost:3000", True),
             ("http://example.com", False),
         ):
             with self.subTest(origin=origin):

@@ -35,7 +35,7 @@ uv run uvicorn app.main:app --reload --no-access-log --host 127.0.0.1 --port 800
 | `CONTEXT_SECRET` | Случайный ключ при старте |
 | `CONTEXT_TTL_SECONDS` | `86400` — срок жизни каждого токена |
 | `RATE_LIMIT` | `20/minute` на IP и URL соседа |
-| `CORS_ORIGINS` | `http://127.0.0.1:3000,http://127.0.0.1:5173` |
+| `CORS_ORIGINS` | `http://127.0.0.1:3000,http://localhost:3000` |
 | `LOG_LEVEL` | `INFO`; в `.env.example` задан `DEBUG` |
 
 Если `DEEPSEEK_BASE_URL` пуст, адрес берётся из `langchain-deepseek` (её же стандартный

@@ -28,5 +28,5 @@ loadtest-server: ## стресс тест приложения проверка 
 loadtest: ## стресс тест приложения проверка выдержит ли приложение много пользователей
 	cd backend && $(UV) run python -m loadtest.run --users $(or $(USERS),100) --turns $(or $(TURNS),35)
 
-dev-frontend: ## Serve the static chat frontend on the CORS-allowed 127.0.0.1:3000
+dev-frontend:
 	cd frontend && python3 -m http.server 3000 --bind 127.0.0.1
