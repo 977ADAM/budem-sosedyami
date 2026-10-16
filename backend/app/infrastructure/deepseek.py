@@ -103,7 +103,7 @@ def build_chat_model(settings: Settings) -> ChatModel:
 
     return DeepSeekChatModel(
         ChatDeepSeek(
-            model = settings.deepseek_model,
+            model = str(settings.deepseek_model), # type: ignore[call-arg]
             api_key = SecretStr(settings.deepseek_api_key),
             max_tokens = settings.deepseek_max_tokens,
             timeout = settings.deepseek_timeout_seconds,
