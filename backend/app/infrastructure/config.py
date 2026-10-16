@@ -47,4 +47,5 @@ def load_settings() -> Settings:
         rate_limit=os.getenv("RATE_LIMIT", defaults.rate_limit),
         cors_origins=_origins(os.getenv("CORS_ORIGINS")),
         log_level=os.getenv("LOG_LEVEL", defaults.log_level).upper(),
+        max_retries=os.getenv()
     )
