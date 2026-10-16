@@ -8,7 +8,7 @@ from typing import Any
 from langchain_core.messages import AIMessage, AnyMessage, BaseMessage, HumanMessage, SystemMessage
 from langchain_deepseek import ChatDeepSeek
 from langgraph.graph import END, START, MessagesState, StateGraph
-from openai import APITimeoutError, OpenAIError
+from openai import APITimeoutError, OpenAIError, api_key
 from pydantic import SecretStr
 
 from app.application.errors import ChatModelFailed, ChatModelNotConfigured, ChatModelTimeout
@@ -101,14 +101,12 @@ def build_chat_model(settings: Settings) -> ChatModel:
         logger.warning("DEEPSEEK_API_KEY не задан: чат будет отвечать с кодом 503")
         return UnconfiguredChatModel()
 
-    options: dict[str, Any] = {
-        "model": settings.deepseek_model,
-        "api_key": SecretStr(settings.deepseek_api_key),
-        "max_tokens": settings.deepseek_max_tokens,
-        "timeout": settings.deepseek_timeout_seconds,
-        "max_retries": settings.max_retries,
-    }
-
-    if settings.deepseek_base_url:
-        options["base_url"] = settings.deepseek_base_url
-    return DeepSeekChatModel(ChatDeepSeek(**options))
+    return DeepSeekChatModel(
+        ChatDeepSeek(
+            model = settings.deepseek_model,
+            api_key = SecretStr(settings.deepseek_api_key),
+            max_tokens = settings.deepseek_max_tokens,
+            timeout = settings.deepseek_timeout_seconds,
+            max_retries = settings.max_retries
+        )
+    )
