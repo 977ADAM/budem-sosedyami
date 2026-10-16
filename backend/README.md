@@ -12,7 +12,7 @@ cd backend
 uv sync
 cp .env.example .env
 # Задайте DEEPSEEK_API_KEY и CONTEXT_SECRET в .env
-uv run uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
+uv run uvicorn app.main:app --reload --no-access-log --host 127.0.0.1 --port 8000
 ```
 
 Документация: `http://127.0.0.1:8000/docs`. Проверка состояния: `GET /health`.
@@ -28,6 +28,7 @@ uv run uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
 | `CONTEXT_TTL_SECONDS` | `86400` | Сколько живёт `context` |
 | `RATE_LIMIT` | `20/minute` | Лимит сообщений с одного IP |
 | `CORS_ORIGINS` | `127.0.0.1:3000`, `:5173` | Сайты, которым разрешено обращаться к API |
+| `LOG_LEVEL` | `INFO` | Уровень логов приложения; сторонние библиотеки пишут только предупреждения |
 
 `CONTEXT_SECRET` обязателен для продакшена: без него ключ создаётся заново при
 каждом старте, и все разговоры начинаются сначала. Смена ключа делает то же самое,
@@ -56,6 +57,24 @@ app/
 реализация `ChatModel` из `application/ports.py` и одна строка в `main.py`.
 Тесты подставляют `FakeChatModel` через `create_app`, без патчинга модулей.
 
+## Логи
+
+Каждая строка содержит ID запроса: `2026-10-16 03:33:10 INFO [60b62bf83e1e] app.http: ...`.
+ID берётся из заголовка `X-Request-ID` клиента (если он безопасный) или создаётся
+сервером и возвращается в ответе — по нему находятся все строки одного запроса.
+
+- `app.http` — метод, путь, код ответа, время, IP клиента. `/health` — только на DEBUG.
+- `app.application.chat_with_neighbor` — новый или продолженный разговор, число реплик,
+  длина сообщения и ответа, была ли обрезка истории, размер `context`.
+- `app.infrastructure.fernet_codec` — почему `context` не принят: подпись, срок, чужой сосед.
+- `app.infrastructure.deepseek` — время ответа модели, токены (в том числе из кэша),
+  `finish_reason`, причина сбоя; предупреждение, если ответ обрезан `DEEPSEEK_MAX_TOKENS`.
+- `app.presentation.errors` — какая ошибка ушла клиенту и с каким кодом.
+- При старте — сводка настроек без секретов.
+
+Текст сообщений и ответов в лог не пишется — только размеры.
+Запускайте uvicorn с `--no-access-log`, иначе он дублирует `app.http`.
+
 ## Как устроена история
 
 - В модель уходят системный профиль соседа, история из `context` и новое сообщение.
@@ -69,5 +88,4 @@ app/
 
 ```sh
 uv run python -m unittest discover -s tests
-cd ../frontend && node --test
 ```

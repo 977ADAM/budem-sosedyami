@@ -18,7 +18,40 @@ from app.infrastructure.deepseek import build_chat_model
 from app.infrastructure.fernet_codec import FernetConversationCodec
 from app.infrastructure.neighbor_catalog import StaticNeighborRepository
 from app.presentation.errors import register_error_handlers
+from app.presentation.request_logging import REQUEST_ID_HEADER, RequestIdFilter, log_requests
 from app.presentation.routes import build_router
+
+logger = logging.getLogger("app")
+
+
+def configure_logging(level: str) -> None:
+    """App loggers use LOG_LEVEL; third-party libraries only report warnings."""
+    handler = logging.StreamHandler()
+    handler.addFilter(RequestIdFilter())
+    handler.setFormatter(
+        logging.Formatter("%(asctime)s %(levelname)s [%(request_id)s] %(name)s: %(message)s")
+    )
+    root = logging.getLogger()
+    root.handlers[:] = [handler]
+    root.setLevel(logging.WARNING)
+    logger.setLevel(level)
+
+
+def _log_startup(settings: Settings, neighbors: tuple[str, ...]) -> None:
+    logger.info(
+        "Starting: model=%s deepseek_configured=%s max_tokens=%s timeout=%ss rate_limit=%s "
+        "context_ttl=%ss cors=%s neighbors=%s",
+        settings.deepseek_model,
+        bool(settings.deepseek_api_key),
+        settings.deepseek_max_tokens,
+        settings.deepseek_timeout_seconds,
+        settings.rate_limit,
+        settings.context_ttl_seconds,
+        ",".join(settings.cors_origins),
+        ",".join(neighbors),
+    )
+    if settings.context_secret_is_ephemeral:
+        logger.warning("CONTEXT_SECRET is not set: conversations will reset on every restart")
 
 
 def create_app(settings: Settings, chat_model: ChatModel | None = None) -> FastAPI:
@@ -27,10 +60,12 @@ def create_app(settings: Settings, chat_model: ChatModel | None = None) -> FastA
 
     @asynccontextmanager
     async def lifespan(_: FastAPI) -> AsyncIterator[None]:
+        _log_startup(settings, neighbors.ids())
         try:
             yield
         finally:
             await model.aclose()
+            logger.info("Stopped")
 
     app = FastAPI(
         title="Будем соседями? API",
@@ -50,12 +85,15 @@ def create_app(settings: Settings, chat_model: ChatModel | None = None) -> FastA
         allow_origins=list(settings.cors_origins),
         allow_credentials=False,
         allow_methods=["GET", "POST"],
-        allow_headers=["Content-Type"],
+        allow_headers=["Content-Type", REQUEST_ID_HEADER],
+        expose_headers=[REQUEST_ID_HEADER],
     )
+    app.middleware("http")(log_requests)
     app.include_router(build_router(limiter, settings.rate_limit, neighbors.ids()))
     register_error_handlers(app)
     return app
 
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
-app = create_app(load_settings())
+_settings = load_settings()
+configure_logging(_settings.log_level)
+app = create_app(_settings)

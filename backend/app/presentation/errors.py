@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import logging
+
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
@@ -15,6 +17,8 @@ from app.application.errors import (
     NeighborNotFound,
 )
 from app.domain.conversation import MAX_MESSAGE_LENGTH
+
+logger = logging.getLogger(__name__)
 
 APPLICATION_ERRORS: dict[type[ApplicationError], tuple[int, str]] = {
     NeighborNotFound: (422, "Неизвестный сосед"),
@@ -34,11 +38,16 @@ def _error(status: int, detail: str) -> JSONResponse:
 
 
 async def _application_error(_: Request, exc: ApplicationError) -> JSONResponse:
-    return _error(*APPLICATION_ERRORS[type(exc)])
+    status, detail = APPLICATION_ERRORS[type(exc)]
+    level = logging.ERROR if status >= 500 else logging.WARNING
+    logger.log(level, "%s -> %s", type(exc).__name__, status)
+    return _error(status, detail)
 
 
 async def _validation_error(_: Request, exc: RequestValidationError) -> JSONResponse:
     fields = {str(part) for error in exc.errors() for part in error["loc"]}
+    problems = sorted({f"{'.'.join(map(str, error['loc']))}:{error['type']}" for error in exc.errors()})
+    logger.warning("Invalid request: %s", ", ".join(problems))
     detail = next(
         (text for field, text in VALIDATION_MESSAGES.items() if field in fields),
         "Некорректный запрос",

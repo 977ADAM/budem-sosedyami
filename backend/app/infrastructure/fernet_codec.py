@@ -33,12 +33,26 @@ class FernetConversationCodec:
         if not token:
             return empty
         try:
-            raw = zlib.decompress(self._fernet.decrypt(token.encode(), ttl=self._ttl_seconds))
-            payload = json.loads(raw)
+            decrypted = self._fernet.decrypt(token.encode(), ttl=self._ttl_seconds)
+        except InvalidToken:
+            logger.info("Context rejected: %s", self._rejection_reason(token))
+            return empty
+        try:
+            payload = json.loads(zlib.decompress(decrypted))
             turns = tuple(Turn(message=message, reply=reply) for message, reply in payload["turns"])
-        except (InvalidToken, ValueError, KeyError, TypeError, zlib.error):
-            logger.info("Context rejected, starting a new conversation")
+        except (ValueError, KeyError, TypeError, zlib.error):
+            logger.warning("Context rejected: signed but unreadable payload")
             return empty
         if payload.get("neighbor_id") != neighbor_id:
+            logger.info(
+                "Context rejected: belongs to neighbor=%s, not %s", payload.get("neighbor_id"), neighbor_id
+            )
             return empty
         return Conversation(neighbor_id, turns)
+
+    def _rejection_reason(self, token: str) -> str:
+        try:
+            self._fernet.decrypt(token.encode())
+        except InvalidToken:
+            return "invalid signature (forged, corrupted or another CONTEXT_SECRET)"
+        return f"expired (older than {self._ttl_seconds}s)"

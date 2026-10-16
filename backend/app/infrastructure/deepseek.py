@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import time
 from collections.abc import Sequence
 from typing import Any
 
@@ -37,15 +38,25 @@ class DeepSeekChatModel:
         for turn in history:
             messages += [HumanMessage(content=turn.message), AIMessage(content=turn.reply)]
         messages.append(HumanMessage(content=message))
+        started = time.perf_counter()
         try:
             result = (await self._graph.ainvoke({"messages": messages}))["messages"][-1]
         except APITimeoutError as exc:
+            logger.error("DeepSeek timed out after %.0fms", self._elapsed_ms(started))
             raise ChatModelTimeout from exc
         except OpenAIError as exc:
+            logger.error(
+                "DeepSeek failed after %.0fms: %s status=%s %s",
+                self._elapsed_ms(started),
+                type(exc).__name__,
+                getattr(exc, "status_code", "-"),
+                exc,
+            )
             raise ChatModelFailed from exc
 
-        self._log_usage(result)
+        self._log_usage(result, self._elapsed_ms(started), len(messages))
         if not isinstance(result.content, str) or not result.content.strip():
+            logger.error("DeepSeek returned an empty reply")
             raise ChatModelFailed("Empty model response")
         return result.content.strip()
 
@@ -55,14 +66,26 @@ class DeepSeekChatModel:
             await client.close()
 
     @staticmethod
-    def _log_usage(result: BaseMessage) -> None:
+    def _elapsed_ms(started: float) -> float:
+        return (time.perf_counter() - started) * 1000
+
+    @staticmethod
+    def _log_usage(result: BaseMessage, elapsed_ms: float, sent_messages: int) -> None:
         usage = getattr(result, "usage_metadata", None) or {}
+        metadata = getattr(result, "response_metadata", None) or {}
         logger.info(
-            "input_tokens=%s cached_tokens=%s output_tokens=%s",
+            "DeepSeek replied in %.0fms model=%s messages=%d input_tokens=%s cached_tokens=%s "
+            "output_tokens=%s finish_reason=%s",
+            elapsed_ms,
+            metadata.get("model_name", "-"),
+            sent_messages,
             usage.get("input_tokens"),
             usage.get("input_token_details", {}).get("cache_read"),
             usage.get("output_tokens"),
+            metadata.get("finish_reason", "-"),
         )
+        if metadata.get("finish_reason") == "length":
+            logger.warning("DeepSeek reply was cut off by DEEPSEEK_MAX_TOKENS")
 
 
 class UnconfiguredChatModel:

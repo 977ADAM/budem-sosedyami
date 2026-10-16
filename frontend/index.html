@@ -14,35 +14,55 @@
           Локальное демо: четыре вымышленных соседа отвечают через DeepSeek. Не вводи личные данные. После обновления страницы начнётся новый разговор.
         </p>
       </div>
-      <button id="reset-button" class="ghost" type="button">Очистить диалоги</button>
+      <a class="ghost" href="">Очистить диалоги</a>
     </header>
 
     <main class="layout">
       <aside class="agents">
         <h2>Соседи</h2>
-        <ul id="agent-list" class="agent-list"></ul>
-        <p id="status" class="status" role="status" aria-live="polite"></p>
+        <label class="agent">
+          <input type="radio" name="agent" value="anton" form="chat-form" checked />
+          <span class="agent-name">Антон</span>
+          <span class="agent-tagline">продуктовый дизайнер, работает из дома</span>
+        </label>
+        <label class="agent">
+          <input type="radio" name="agent" value="marina" form="chat-form" />
+          <span class="agent-name">Марина</span>
+          <span class="agent-tagline">редактор, мама первоклассницы</span>
+        </label>
+        <label class="agent">
+          <input type="radio" name="agent" value="pavel" form="chat-form" />
+          <span class="agent-name">Павел</span>
+          <span class="agent-tagline">операционный менеджер, много ездит</span>
+        </label>
+        <label class="agent">
+          <input type="radio" name="agent" value="vera" form="chat-form" />
+          <span class="agent-name">Вера</span>
+          <span class="agent-tagline">фотограф, гуляет по городу</span>
+        </label>
       </aside>
 
       <section class="chat">
-        <ol id="chat-log" class="chat-log" aria-live="polite" aria-label="История диалога"></ol>
+        <ol id="log-anton" class="chat-log" aria-live="polite"></ol>
+        <ol id="log-marina" class="chat-log" aria-live="polite"></ol>
+        <ol id="log-pavel" class="chat-log" aria-live="polite"></ol>
+        <ol id="log-vera" class="chat-log" aria-live="polite"></ol>
 
         <form id="chat-form" class="composer" autocomplete="off">
-          <label class="sr-only" for="message-input">Сообщение соседу</label>
           <input
-            id="message-input"
             name="message"
             type="text"
             placeholder="Напиши соседу…"
+            aria-label="Сообщение соседу"
             maxlength="500"
+            pattern=".*\S.*"
             required
           />
-          <span id="counter" class="counter" aria-hidden="true">0/500</span>
-          <button id="send-button" type="submit">Отправить</button>
+          <button name="send" type="submit">Отправить</button>
         </form>
       </section>
     </main>
 
-    <script type="module" src="app.js"></script>
+    <script src="app.js"></script>
   </body>
 </html>
