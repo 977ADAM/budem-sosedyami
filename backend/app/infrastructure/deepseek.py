@@ -1,5 +1,3 @@
-"""ChatModel backed by DeepSeek through LangChain and a one-node LangGraph."""
-
 from __future__ import annotations
 
 import logging
