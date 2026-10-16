@@ -85,6 +85,28 @@ ssh myserver 'ss -tln | grep -E "127\.0\.0\.1:(8000|8010)"'
 
 4. Проверка снаружи: `https://dev.coresmart.tech/sosedyami/` (логин `admin`).
 
+## Реальный IP клиента
+
+Балансировщик (`192.168.100.198`, подсеть `192.168.100.0/24`) дописывает IP
+клиента **в конец** `X-Forwarded-For`, а всё, что клиент прислал сам, остаётся в
+начале заголовка. Uvicorn запущен с `--proxy-headers --forwarded-allow-ips '*'` и
+берёт **первое** значение XFF — то есть клиентское.
+
+Поэтому в `sosedyami.locations.inc` для API включён `realip`: локация доверяет
+подсети балансировщика, берёт последний недоверенный адрес и передаёт дальше
+`X-Forwarded-For: $remote_addr` (только проверенный IP). Проверка:
+
+```sh
+# снаружи, с подставленным заголовком: client= должен показать реальный IP
+curl -s -o /dev/null -H "X-Forwarded-For: 203.0.113.99" -H 'X-API-Key: <ключ>' \
+  -H 'Content-Type: application/json' -d '{"message":"hi"}' \
+  https://dev.coresmart.tech/sosedyami/api/agents/nobody/chat
+ssh myserver 'docker logs --tail 3 $(docker ps --filter name=budem-sosedyami -q) 2>&1 | grep app.http'
+```
+
+Без `realip` лимит 20/мин обходится перебором `X-Forwarded-For`, а в логах
+оказывается выдуманный адрес.
+
 ## Обновление кода
 
 ```sh
@@ -126,6 +148,10 @@ ssh myserver 'tail -50 /var/log/angie/error.log'
   `DEEPSEEK_API_KEY` / сеть до `api.deepseek.com`.
 - `401` — basic-auth: пароль из `/etc/angie/.htpasswd`, пользователь `admin`.
 - Ответы `429` у всех сразу означают, что до бэкенда не доходит реальный IP
-  клиента: проверьте, что балансировщик заполняет `X-Forwarded-For`.
+  клиента: проверьте, что `set_real_ip_from` в `sosedyami.locations.inc`
+  покрывает адрес балансировщика (`grep remote_addr /var/log/angie/access.log`),
+  и что реальный IP приходит последним в `X-Forwarded-For`.
+- Клиентские `422/429/502` и время ответа видны в логах контейнера вместе с
+  `X-Request-ID` из ответа API.
 - Диалоги сбрасываются после перезапуска — изменился или потерялся
   `CONTEXT_SECRET` в `backend/.env`.
