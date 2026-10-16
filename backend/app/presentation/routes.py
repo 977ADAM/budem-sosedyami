@@ -7,19 +7,19 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, Path, Request
 from slowapi import Limiter
 
-from app.application.agent_service import ChatWithNeighbor
+from app.application.agent_service import AgentService
 from app.presentation.schemas import ChatRequest, ChatResponse, ErrorResponse
 
 
-def get_chat_with_neighbor(request: Request) -> ChatWithNeighbor:
+def get_chat_with_neighbor(request: Request) -> AgentService:
     """The use case is wired in `main.create_app`; a missing one is a wiring bug."""
     use_case = getattr(request.app.state, "chat_with_neighbor", None)
-    if not isinstance(use_case, ChatWithNeighbor):
+    if not isinstance(use_case, AgentService):
         raise RuntimeError("chat_with_neighbor is not configured")
     return use_case
 
 
-ChatWithNeighborDep = Annotated[ChatWithNeighbor, Depends(get_chat_with_neighbor)]
+AgentServiceDep = Annotated[AgentService, Depends(get_chat_with_neighbor)]
 
 
 def build_router(limiter: Limiter, rate_limit: str, neighbor_ids: tuple[str, ...]) -> APIRouter:
@@ -49,10 +49,10 @@ def build_router(limiter: Limiter, rate_limit: str, neighbor_ids: tuple[str, ...
     async def chat(
         request: Request,
         chat_request: ChatRequest,
-        chat_with_neighbor: ChatWithNeighborDep,
+        agent_srv: AgentServiceDep,
         agent_id: str = Path(description=f"ID соседа: {', '.join(neighbor_ids)}"),
     ) -> ChatResponse:
-        result = await chat_with_neighbor(agent_id, chat_request.message, chat_request.context)
+        result = await agent_srv(agent_id, chat_request.message, chat_request.context)
         return ChatResponse(reply=result.reply, context=result.context)
 
     return router
