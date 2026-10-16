@@ -3,7 +3,6 @@ from __future__ import annotations
 import logging
 import time
 from collections.abc import Sequence
-from typing import Any
 
 from langchain_core.messages import AIMessage, AnyMessage, BaseMessage, HumanMessage, SystemMessage
 from langchain_deepseek import ChatDeepSeek
@@ -19,7 +18,7 @@ logger = logging.getLogger(__name__)
 
 
 class DeepSeekChatModel:
-    def __init__(self, llm: Any) -> None:
+    def __init__(self, llm: ChatDeepSeek) -> None:
         self._llm = llm
 
     async def reply(self, system_prompt: str, history: Sequence[Turn], message: str) -> str:
