@@ -8,7 +8,7 @@ from typing import Any
 from langchain_core.messages import AIMessage, AnyMessage, BaseMessage, HumanMessage, SystemMessage
 from langchain_deepseek import ChatDeepSeek
 from langgraph.graph import END, START, MessagesState, StateGraph
-from openai import APITimeoutError, OpenAIError, api_key
+from openai import APITimeoutError, OpenAIError
 from pydantic import SecretStr
 
 from app.application.errors import ChatModelFailed, ChatModelNotConfigured, ChatModelTimeout
