@@ -11,7 +11,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 
-from app.application.agent_service import ChatWithNeighbor
+from app.application.agent_service import AgentService
 from app.application.ports import ChatModel
 from app.infrastructure.config import Settings, load_settings
 from app.infrastructure.deepseek import build_chat_model
@@ -79,7 +79,7 @@ def create_app(settings: Settings, chat_model: ChatModel | None = None) -> FastA
         "в следующем запросе, чтобы продолжить разговор.",
         lifespan=lifespan,
     )
-    app.state.chat_with_neighbor = ChatWithNeighbor(
+    app.state.chat_with_neighbor = AgentService(
         neighbors=neighbors,
         model=model,
         codec=FernetConversationCodec(settings.context_secret, settings.context_ttl_seconds),
