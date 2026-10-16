@@ -7,7 +7,6 @@ from typing import Any
 
 from langchain_core.messages import AIMessage, AnyMessage, BaseMessage, HumanMessage, SystemMessage
 from langchain_deepseek import ChatDeepSeek
-from langgraph.graph import END, START, MessagesState, StateGraph
 from openai import APITimeoutError, OpenAIError
 from pydantic import SecretStr
 
@@ -23,15 +22,6 @@ class DeepSeekChatModel:
     def __init__(self, llm: Any) -> None:
         self._llm = llm
 
-        async def call_model(state: MessagesState) -> dict[str, list[BaseMessage]]:
-            return {"messages": [await llm.ainvoke(state["messages"])]}
-
-        builder = StateGraph(MessagesState)
-        builder.add_node("call_model", call_model)
-        builder.add_edge(START, "call_model")
-        builder.add_edge("call_model", END)
-        self._graph = builder.compile()
-
     async def reply(self, system_prompt: str, history: Sequence[Turn], message: str) -> str:
         messages: list[AnyMessage] = [SystemMessage(content=system_prompt)]
         for turn in history:
@@ -39,7 +29,7 @@ class DeepSeekChatModel:
         messages.append(HumanMessage(content=message))
         started = time.perf_counter()
         try:
-            result = (await self._graph.ainvoke(MessagesState(messages=messages)))["messages"][-1]
+            result = await self._llm.ainvoke(messages)
         except APITimeoutError as exc:
             logger.error("DeepSeek timed out after %.0fms", self._elapsed_ms(started))
             raise ChatModelTimeout from exc
