@@ -1,7 +1,8 @@
 /**
  * Состояние и рендер простого чата поверх локального FastAPI backend.
  *
- * История живёт только в памяти вкладки и передаётся с каждым запросом.
+ * Вкладка хранит реплики для отображения и непрозрачный context каждого соседа,
+ * который backend возвращает в ответе и ждёт обратно в следующем запросе.
  */
 
 import { MAX_MESSAGE_LENGTH, createAgentApi } from "./agent-api.js";
@@ -30,6 +31,7 @@ const elements = {
 const state = {
   agentId: AGENTS[0].id,
   turns: new Map(AGENTS.map((agent) => [agent.id, []])),
+  contexts: new Map(),
   pending: false,
 };
 
@@ -144,7 +146,8 @@ async function onSubmit(event) {
   setStatus("Сосед печатает…");
 
   try {
-    const reply = await api.sendMessage(agentId, text, turns);
+    const { reply, context } = await api.sendMessage(agentId, text, state.contexts.get(agentId));
+    state.contexts.set(agentId, context);
     turns[turns.length - 1] = { message: text, reply };
     setStatus("");
   } catch (error) {
@@ -163,6 +166,7 @@ function onReset() {
   if (state.pending) return;
   if (!window.confirm("Очистить все диалоги в этой вкладке?")) return;
   for (const agentId of state.turns.keys()) state.turns.set(agentId, []);
+  state.contexts.clear();
   renderLog();
   setStatus("Диалоги очищены", "ok");
 }

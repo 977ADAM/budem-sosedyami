@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { ApiError, MAX_MESSAGE_LENGTH, createAgentApi } from "../agent-api.js";
+import { ApiError, createAgentApi } from "../agent-api.js";
 
 function jsonResponse(body, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -19,70 +19,41 @@ function recordingFetch(handler) {
   return { calls, fetchImpl };
 }
 
-test("unknown agent ids never reach the network", async () => {
-  const { calls, fetchImpl } = recordingFetch(() => jsonResponse({ reply: "ok" }));
-  const api = createAgentApi({ fetchImpl });
+test("sendMessage posts the message and context without cookies", async () => {
+  const { calls, fetchImpl } = recordingFetch(() =>
+    jsonResponse({ reply: "Ответ соседа.", context: "ctx1" }),
+  );
+  const api = createAgentApi({ fetchImpl, baseUrl: "http://127.0.0.1:8000" });
 
-  await assert.rejects(() => api.sendMessage("nobody", "Привет"), /Unknown agent/);
-  assert.equal(calls.length, 0);
-});
+  assert.deepEqual(await api.sendMessage("pavel", "Как добраться?"), {
+    reply: "Ответ соседа.",
+    context: "ctx1",
+  });
+  await api.sendMessage("pavel", "А потом?", "ctx1");
 
-test("sendMessage posts the message without cookies", async () => {
-  const { calls, fetchImpl } = recordingFetch(() => jsonResponse({ reply: "  Ответ соседа.  " }));
-  const api = createAgentApi({ fetchImpl });
-
-  assert.equal(await api.sendMessage("pavel", "  Как добраться?  "), "Ответ соседа.");
-  assert.equal(calls[0].url, "/api/agents/pavel/chat");
+  assert.equal(calls[0].url, "http://127.0.0.1:8000/api/agents/pavel/chat");
   assert.equal(calls[0].options.method, "POST");
   assert.equal(calls[0].options.credentials, "omit");
   assert.equal(calls[0].options.headers["Content-Type"], "application/json");
-  assert.deepEqual(JSON.parse(calls[0].options.body), {
-    message: "Как добраться?",
-    history: [],
-  });
+  assert.deepEqual(JSON.parse(calls[0].options.body), { message: "Как добраться?" });
+  assert.deepEqual(JSON.parse(calls[1].options.body), { message: "А потом?", context: "ctx1" });
 });
 
-test("sendMessage rejects blank and oversized messages without calling the backend", async () => {
-  const { calls, fetchImpl } = recordingFetch(() => jsonResponse({ reply: "ok" }));
-  const api = createAgentApi({ fetchImpl });
-
-  await assert.rejects(() => api.sendMessage("vera", "   "), ApiError);
-  await assert.rejects(
-    () => api.sendMessage("vera", "а".repeat(MAX_MESSAGE_LENGTH + 1)),
-    ApiError,
-  );
-  assert.equal(calls.length, 0);
-});
-
-test("sendMessage rejects an empty reply", async () => {
-  const { fetchImpl } = recordingFetch(() => jsonResponse({ reply: "   " }));
-  const api = createAgentApi({ fetchImpl });
-
-  await assert.rejects(() => api.sendMessage("anton", "Привет"), /пустой ответ/);
-});
-
-test("sendMessage sends only completed turns and bounds context", async () => {
-  const { calls, fetchImpl } = recordingFetch(() => jsonResponse({ reply: "ok" }));
-  const api = createAgentApi({ fetchImpl, baseUrl: "http://127.0.0.1:8000" });
-  const history = Array.from({length: 101}, (_, i) => ({message: String(i), reply: "ok"}));
-  history.push({message: "failed", error: "offline"}, {message: "pending", pending: true});
-  await api.sendMessage("anton", "Hi", history);
-  const body = JSON.parse(calls[0].options.body);
-  assert.equal(calls[0].url, "http://127.0.0.1:8000/api/agents/anton/chat");
-  assert.equal(body.history.length, 100);
-  assert.deepEqual(body.history[0], {message: "1", reply: "ok"});
-  assert.deepEqual(body.history.at(-1), {message: "100", reply: "ok"});
-  assert.equal(history.length, 103);
-});
-
-test("upstream failures surface as ApiError with the status code", async () => {
-  const { fetchImpl } = recordingFetch(() => jsonResponse({ detail: "DeepSeek request failed" }, 502));
+test("backend error detail is surfaced as is", async () => {
+  const { fetchImpl } = recordingFetch(() => jsonResponse({ detail: "Неизвестный сосед" }, 422));
   const api = createAgentApi({ fetchImpl });
 
   await assert.rejects(
-    () => api.sendMessage("anton", "Привет"),
-    (error) => error instanceof ApiError && error.status === 502 && /502/.test(error.message),
+    () => api.sendMessage("nobody", "Привет"),
+    (error) => error instanceof ApiError && error.status === 422 && error.message === "Неизвестный сосед",
   );
+});
+
+test("a non-JSON error still produces a readable ApiError", async () => {
+  const { fetchImpl } = recordingFetch(() => new Response("Bad Gateway", { status: 502 }));
+  const api = createAgentApi({ fetchImpl });
+
+  await assert.rejects(() => api.sendMessage("anton", "Привет"), /Ошибка сервера \(502\)/);
 });
 
 test("an unreachable backend surfaces a readable ApiError", async () => {
@@ -91,5 +62,5 @@ test("an unreachable backend surfaces a readable ApiError", async () => {
   });
   const api = createAgentApi({ fetchImpl });
 
-  await assert.rejects(() => api.sendMessage("anton", "Hi"), /Backend недоступен/);
+  await assert.rejects(() => api.sendMessage("anton", "Hi"), /Сервер недоступен/);
 });

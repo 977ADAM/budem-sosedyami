@@ -29,8 +29,9 @@ async function openTab() {
   const context = vm.createContext({
     AGENTS, MAX_MESSAGE_LENGTH,
     createAgentApi: (options) => createAgentApi({ ...options, fetchImpl: async (_, options) => {
-      requests.push(JSON.parse(options.body));
-      return new Response(JSON.stringify({reply: "Ответ"}), {status: 200});
+      const body = JSON.parse(options.body);
+      requests.push(body);
+      return new Response(JSON.stringify({reply: "Ответ", context: `ctx${requests.length}`}), {status: 200});
     }}),
     document: {
       querySelector: (selector) => {
@@ -49,24 +50,26 @@ async function openTab() {
   }};
 }
 
-test("tab owns separate neighbor histories; reset and reload discard them without network calls", async () => {
+test("tab returns each neighbor's latest context; reset and reload start a new conversation", async () => {
   const tab = await openTab();
   assert.equal(tab.requests.length, 0);
   await tab.send("Первое");
   await tab.send("Второе");
-  assert.deepEqual(tab.requests[1].history, [{message: "Первое", reply: "Ответ"}]);
-  const buttons = tab.elements.get("#agent-list").children;
-  buttons[1].children[0].handlers.click();
+  assert.deepEqual(tab.requests, [
+    {message: "Первое"},
+    {message: "Второе", context: "ctx1"},
+  ]);
+  tab.elements.get("#agent-list").children[1].children[0].handlers.click();
   await tab.send("Марина");
-  assert.deepEqual(tab.requests[2].history, []);
+  assert.deepEqual(tab.requests[2], {message: "Марина"});
   tab.elements.get("#agent-list").children[0].children[0].handlers.click();
   await tab.send("Третье");
-  assert.equal(tab.requests[3].history.length, 2);
+  assert.equal(tab.requests[3].context, "ctx2");
   tab.elements.get("#reset-button").handlers.click();
   assert.equal(tab.requests.length, 4);
   await tab.send("После очистки");
-  assert.deepEqual(tab.requests[4].history, []);
+  assert.deepEqual(tab.requests[4], {message: "После очистки"});
   const reloaded = await openTab();
   await reloaded.send("После обновления");
-  assert.deepEqual(reloaded.requests[0].history, []);
+  assert.deepEqual(reloaded.requests[0], {message: "После обновления"});
 });

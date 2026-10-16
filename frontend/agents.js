@@ -9,5 +9,3 @@ export const AGENTS = [
   { id: "pavel", name: "Павел", tagline: "операционный менеджер, много ездит" },
   { id: "vera", name: "Вера", tagline: "фотограф, гуляет по городу" },
 ];
-
-export const AGENT_IDS = new Set(AGENTS.map((agent) => agent.id));
