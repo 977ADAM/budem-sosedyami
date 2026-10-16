@@ -14,7 +14,6 @@ from dotenv import load_dotenv
 class Settings:
     deepseek_api_key: str = ""
     deepseek_model: str = "deepseek-flash"
-    deepseek_base_url: str = ""
     deepseek_max_tokens: int = 1000
     deepseek_timeout_seconds: float = 30.0
     context_secret: str = ""
