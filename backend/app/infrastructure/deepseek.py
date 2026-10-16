@@ -101,13 +101,14 @@ def build_chat_model(settings: Settings) -> ChatModel:
         logger.warning("DEEPSEEK_API_KEY не задан: чат будет отвечать с кодом 503")
         return UnconfiguredChatModel()
 
-    return DeepSeekChatModel(
-        ChatDeepSeek(
-            model=settings.deepseek_model,
-            api_key=SecretStr(settings.deepseek_api_key),
-            base_url=settings.deepseek_base_url,
-            max_tokens=settings.deepseek_max_tokens,
-            timeout=settings.deepseek_timeout_seconds,
-            max_retries=0,
-        )
-    )
+    options: dict[str, Any] = {
+        "model": settings.deepseek_model,
+        "api_key": SecretStr(settings.deepseek_api_key),
+        "max_tokens": settings.deepseek_max_tokens,
+        "timeout": settings.deepseek_timeout_seconds,
+        "max_retries": settings.max_retries,
+    }
+
+    if settings.deepseek_base_url:
+        options["base_url"] = settings.deepseek_base_url
+    return DeepSeekChatModel(ChatDeepSeek(**options))

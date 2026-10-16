@@ -30,7 +30,7 @@ uv run uvicorn app.main:app --reload --no-access-log --host 127.0.0.1 --port 800
 | --- | --- |
 | `DEEPSEEK_API_KEY` | Пусто — чат возвращает 503 |
 | `DEEPSEEK_MODEL` | `deepseek-flash` |
-| `DEEPSEEK_BASE_URL` | `https://api.deepseek.com`; можно указать прокси или адрес с `/v1` |
+| `DEEPSEEK_BASE_URL` | Пусто — стандартный `https://api.deepseek.com/v1` из `langchain-deepseek`; задайте для прокси или шлюза |
 | `DEEPSEEK_MAX_TOKENS` | `1000` токенов ответа |
 | `DEEPSEEK_TIMEOUT_SECONDS` | `30`; держите меньше `proxy_read_timeout` (120 с) в [angie](../deploy/angie-sosedyami.locations.inc) |
 | `CONTEXT_SECRET` | Случайный ключ при старте |
@@ -38,6 +38,9 @@ uv run uvicorn app.main:app --reload --no-access-log --host 127.0.0.1 --port 800
 | `RATE_LIMIT` | `20/minute` на IP и URL соседа |
 | `CORS_ORIGINS` | `http://127.0.0.1:3000,http://127.0.0.1:5173` |
 | `LOG_LEVEL` | `INFO`; в `.env.example` задан `DEBUG` |
+
+Если `DEEPSEEK_BASE_URL` пуст, адрес берётся из `langchain-deepseek` (её же стандартный
+`DEEPSEEK_API_BASE` тоже учитывается). Задавайте переменную только для прокси или шлюза.
 
 Для продакшена задайте постоянный `CONTEXT_SECRET`, одинаковый для всех процессов.
 Без него история сбрасывается после перезапуска и не переносится между процессами.

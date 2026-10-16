@@ -14,13 +14,14 @@ from dotenv import load_dotenv
 class Settings:
     deepseek_api_key: str = ""
     deepseek_model: str = "deepseek-flash"
-    deepseek_base_url: str = "https://api.deepseek.com"
+    deepseek_base_url: str = ""
     deepseek_max_tokens: int = 1000
     deepseek_timeout_seconds: float = 30.0
     context_secret: str = ""
     context_secret_is_ephemeral: bool = False
     context_ttl_seconds: int = 24 * 60 * 60
     rate_limit: str = "20/minute"
+    max_retries: int = 0
     cors_origins: tuple[str, ...] = ("http://127.0.0.1:3000", "http://127.0.0.1:5173")
     log_level: str = "INFO"
 
@@ -32,7 +33,8 @@ def _origins(configured: str | None) -> tuple[str, ...]:
 
 
 def _base_url(configured: str | None) -> str:
-    return (configured or "").strip().rstrip("/") or Settings().deepseek_base_url
+    """Пустая строка означает стандартный адрес DeepSeek из langchain-deepseek."""
+    return (configured or "").strip().rstrip("/")
 
 
 def load_settings() -> Settings:
