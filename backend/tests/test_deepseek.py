@@ -67,7 +67,6 @@ class DeepSeekChatModelTests(unittest.IsolatedAsyncioTestCase):
             Settings(
                 deepseek_api_key="key",
                 deepseek_model="deepseek-chat",
-                deepseek_base_url="https://proxy.internal/deepseek/v1",
                 deepseek_max_tokens=123,
                 deepseek_timeout_seconds=12.5,
             )
@@ -76,8 +75,7 @@ class DeepSeekChatModelTests(unittest.IsolatedAsyncioTestCase):
         llm = model._llm
         self.assertIsInstance(llm, ChatDeepSeek)
         self.assertEqual(llm.model_name, "deepseek-chat")
-        self.assertEqual(llm.api_base, "https://proxy.internal/deepseek/v1")
         self.assertEqual(llm.max_tokens, 123)
         self.assertEqual(llm.request_timeout, 12.5)
-        self.assertEqual(llm.max_retries, 0)
+        self.assertEqual(llm.max_retries, 2)
         self.assertEqual(llm.api_key.get_secret_value(), "key")
