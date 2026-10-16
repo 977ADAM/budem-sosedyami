@@ -30,12 +30,6 @@ def _origins(configured: str | None) -> tuple[str, ...]:
         return Settings().cors_origins
     return tuple(origin.strip().rstrip("/") for origin in configured.split(",") if origin.strip())
 
-
-def _base_url(configured: str | None) -> str:
-    """Пустая строка означает стандартный адрес DeepSeek из langchain-deepseek."""
-    return (configured or "").strip().rstrip("/")
-
-
 def load_settings() -> Settings:
     load_dotenv(Path(__file__).resolve().parents[2] / ".env")
     defaults = Settings()
@@ -43,7 +37,6 @@ def load_settings() -> Settings:
     return Settings(
         deepseek_api_key=os.getenv("DEEPSEEK_API_KEY", "").strip(),
         deepseek_model=os.getenv("DEEPSEEK_MODEL", defaults.deepseek_model),
-        deepseek_base_url=_base_url(os.getenv("DEEPSEEK_BASE_URL")),
         deepseek_max_tokens=int(os.getenv("DEEPSEEK_MAX_TOKENS", defaults.deepseek_max_tokens)),
         deepseek_timeout_seconds=float(
             os.getenv("DEEPSEEK_TIMEOUT_SECONDS", defaults.deepseek_timeout_seconds)
