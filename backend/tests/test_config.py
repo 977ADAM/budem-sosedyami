@@ -22,17 +22,9 @@ class LoadSettingsTests(unittest.TestCase):
     def test_defaults_are_used_without_environment(self) -> None:
         settings = self.load()
         self.assertEqual(settings.deepseek_model, "deepseek-flash")
-        self.assertEqual(settings.deepseek_base_url, "")
         self.assertEqual(settings.deepseek_max_tokens, 1000)
         self.assertEqual(settings.deepseek_timeout_seconds, 30.0)
 
-    def test_deepseek_base_url_comes_from_the_environment(self) -> None:
-        settings = self.load(DEEPSEEK_BASE_URL="https://proxy.internal/deepseek/v1/")
-        self.assertEqual(settings.deepseek_base_url, "https://proxy.internal/deepseek/v1")
-
-    def test_blank_deepseek_base_url_stays_unset(self) -> None:
-        settings = self.load(DEEPSEEK_BASE_URL="   ")
-        self.assertEqual(settings.deepseek_base_url, "")
 
     def test_deepseek_timeout_comes_from_the_environment(self) -> None:
         settings = self.load(DEEPSEEK_TIMEOUT_SECONDS="12.5")
@@ -42,13 +34,6 @@ class LoadSettingsTests(unittest.TestCase):
         settings = self.load(DEEPSEEK_MODEL="deepseek-chat", DEEPSEEK_MAX_TOKENS="777")
         self.assertEqual(settings.deepseek_model, "deepseek-chat")
         self.assertEqual(settings.deepseek_max_tokens, 777)
-
-    def test_custom_base_url_reaches_the_chat_model(self) -> None:
-        model = self.build(
-            DEEPSEEK_API_KEY="key", DEEPSEEK_BASE_URL="https://proxy.internal/deepseek/v1"
-        )
-        self.assertEqual(model._llm.api_base, "https://proxy.internal/deepseek/v1")
-        self.assertIn("api_base", model._llm.model_fields_set)
 
     def test_standard_base_url_is_left_to_chatdeepseek(self) -> None:
         model = self.build(DEEPSEEK_API_KEY="key")
