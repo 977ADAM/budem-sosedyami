@@ -20,7 +20,7 @@ class Settings:
     context_secret_is_ephemeral: bool = False
     context_ttl_seconds: int = 24 * 60 * 60
     rate_limit: str = "20/minute"
-    max_retries: int = 0
+    max_retries: int = 2
     cors_origins: tuple[str, ...] = ("http://127.0.0.1:3000", "http://127.0.0.1:5173")
     log_level: str = "INFO"
 
