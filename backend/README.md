@@ -4,6 +4,9 @@ FastAPI → LangGraph/LangChain → DeepSeek. Переписка не сохра
 клиент передаёт зашифрованную историю в `context`.
 [Контракт API](../README.md).
 
+Для сервера: [Docker Compose](../README.md#деплой-docker-compose).
+Compose запускает один процесс backend. Статические файлы фронтенда раздаются отдельно.
+
 ## Запуск
 
 Нужны Python 3.11+ и `uv`.
