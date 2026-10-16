@@ -67,6 +67,17 @@ IP клиента. В `CORS_ORIGINS` указывайте полные адре�
 
 ## Проверки
 
+`uv sync` устанавливает Ruff и mypy вместе с dev-зависимостями. Из корня проекта:
+
+```sh
+make lint       # Ruff: app, tests и loadtest
+make typecheck  # mypy: app и loadtest
+make test       # unittest
+make check      # все проверки
+```
+
+Настройки находятся в `backend/pyproject.toml`; версии закреплены в `uv.lock`.
+
 Из папки `backend` — тесты с подставной моделью, без запросов к DeepSeek:
 
 ```sh

@@ -5,10 +5,11 @@ import time
 from collections.abc import Sequence
 from typing import Any
 
-from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage
+from langchain_core.messages import AIMessage, AnyMessage, BaseMessage, HumanMessage, SystemMessage
 from langchain_openai import ChatOpenAI
 from langgraph.graph import END, START, MessagesState, StateGraph
 from openai import APITimeoutError, OpenAIError
+from pydantic import SecretStr
 
 from app.application.errors import ChatModelFailed, ChatModelNotConfigured, ChatModelTimeout
 from app.application.ports import ChatModel
@@ -32,13 +33,13 @@ class DeepSeekChatModel:
         self._graph = builder.compile()
 
     async def reply(self, system_prompt: str, history: Sequence[Turn], message: str) -> str:
-        messages: list[BaseMessage] = [SystemMessage(content=system_prompt)]
+        messages: list[AnyMessage] = [SystemMessage(content=system_prompt)]
         for turn in history:
             messages += [HumanMessage(content=turn.message), AIMessage(content=turn.reply)]
         messages.append(HumanMessage(content=message))
         started = time.perf_counter()
         try:
-            result = (await self._graph.ainvoke({"messages": messages}))["messages"][-1]
+            result = (await self._graph.ainvoke(MessagesState(messages=messages)))["messages"][-1]
         except APITimeoutError as exc:
             logger.error("DeepSeek timed out after %.0fms", self._elapsed_ms(started))
             raise ChatModelTimeout from exc
@@ -101,7 +102,7 @@ def build_chat_model(settings: Settings) -> ChatModel:
     return DeepSeekChatModel(
         ChatOpenAI(
             model=settings.deepseek_model,
-            api_key=settings.deepseek_api_key,
+            api_key=SecretStr(settings.deepseek_api_key),
             base_url=settings.deepseek_base_url,
             max_tokens=settings.deepseek_max_tokens,
             timeout=settings.deepseek_timeout_seconds,

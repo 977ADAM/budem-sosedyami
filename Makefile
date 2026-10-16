@@ -2,6 +2,19 @@
 
 UV ?= uv
 
+.PHONY: backend-install dev-backend loadtest-server loadtest dev-frontend lint typecheck test check
+
+lint: ## Check Python code with Ruff
+	cd backend && $(UV) run --locked ruff check .
+
+typecheck: ## Check backend types with mypy
+	cd backend && $(UV) run --locked mypy
+
+test: ## Run backend unit tests
+	cd backend && $(UV) run --locked python -m unittest discover -s tests
+
+check: lint typecheck test ## Run all backend checks
+
 backend-install: ## Sync Python dependencies with uv
 	cd backend && $(UV) sync
 

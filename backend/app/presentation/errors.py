@@ -37,14 +37,16 @@ def _error(status: int, detail: str) -> JSONResponse:
     return JSONResponse(status_code=status, content={"detail": detail})
 
 
-async def _application_error(_: Request, exc: ApplicationError) -> JSONResponse:
+async def _application_error(_: Request, exc: Exception) -> JSONResponse:
+    assert isinstance(exc, ApplicationError)
     status, detail = APPLICATION_ERRORS[type(exc)]
     level = logging.ERROR if status >= 500 else logging.WARNING
     logger.log(level, "%s -> %s", type(exc).__name__, status)
     return _error(status, detail)
 
 
-async def _validation_error(_: Request, exc: RequestValidationError) -> JSONResponse:
+async def _validation_error(_: Request, exc: Exception) -> JSONResponse:
+    assert isinstance(exc, RequestValidationError)
     fields = {str(part) for error in exc.errors() for part in error["loc"]}
     problems = sorted({f"{'.'.join(map(str, error['loc']))}:{error['type']}" for error in exc.errors()})
     logger.warning("Invalid request: %s", ", ".join(problems))
@@ -55,7 +57,7 @@ async def _validation_error(_: Request, exc: RequestValidationError) -> JSONResp
     return _error(422, detail)
 
 
-async def _rate_limited(_: Request, __: RateLimitExceeded) -> JSONResponse:
+async def _rate_limited(_: Request, __: Exception) -> JSONResponse:
     return _error(429, "Слишком много сообщений, подождите минуту")
 
 
