@@ -96,9 +96,11 @@ class UnconfiguredChatModel:
 
 
 def build_chat_model(settings: Settings) -> ChatModel:
+
     if not settings.deepseek_api_key:
-        logger.warning("DEEPSEEK_API_KEY is not set: chat will answer 503")
+        logger.warning("DEEPSEEK_API_KEY не задан: чат будет отвечать с кодом 503")
         return UnconfiguredChatModel()
+
     return DeepSeekChatModel(
         ChatOpenAI(
             model=settings.deepseek_model,
