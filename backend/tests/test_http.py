@@ -82,6 +82,22 @@ class HttpApiTests(unittest.TestCase):
                 )
                 self.assertEqual(response.headers.get("access-control-allow-origin") == origin, allowed)
 
+    def test_unexpected_error_returns_readable_json_with_the_request_id(self) -> None:
+        app = create_app(SETTINGS, self.model)
+
+        @app.get("/boom")
+        async def boom() -> None:
+            raise RuntimeError("boom")
+
+        response = TestClient(app, raise_server_exceptions=False).get(
+            "/boom", headers={"X-Request-ID": "front-42"}
+        )
+        self.assertEqual(response.status_code, 500)
+        self.assertEqual(
+            response.json(), {"detail": "Непредвиденная ошибка сервера, попробуйте позже"}
+        )
+        self.assertEqual(response.headers["X-Request-ID"], "front-42")
+
     def test_openapi_documents_the_single_endpoint(self) -> None:
         schema = self.client.get("/openapi.json").json()
         self.assertEqual(list(schema["paths"]), ["/api/agents/{agent_id}/chat"])

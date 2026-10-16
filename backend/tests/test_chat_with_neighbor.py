@@ -2,7 +2,7 @@ import unittest
 
 from fakes import FakeChatModel
 
-from app.application.chat_with_neighbor import ChatWithNeighbor
+from app.application.agent_service import ChatWithNeighbor
 from app.application.errors import ChatModelTimeout, NeighborNotFound
 from app.infrastructure.fernet_codec import FernetConversationCodec
 from app.infrastructure.neighbor_catalog import StaticNeighborRepository

@@ -17,6 +17,7 @@ from app.application.errors import (
     NeighborNotFound,
 )
 from app.domain.conversation import MAX_MESSAGE_LENGTH
+from app.presentation.request_logging import REQUEST_ID_HEADER
 
 logger = logging.getLogger(__name__)
 
@@ -26,6 +27,8 @@ APPLICATION_ERRORS: dict[type[ApplicationError], tuple[int, str]] = {
     ChatModelTimeout: (504, "Сосед не ответил вовремя, попробуйте ещё раз"),
     ChatModelFailed: (502, "Сосед не смог ответить, попробуйте ещё раз"),
 }
+
+UNEXPECTED_ERROR_DETAIL = "Непредвиденная ошибка сервера, попробуйте позже"
 
 VALIDATION_MESSAGES = {
     "message": f"Сообщение должно быть от 1 до {MAX_MESSAGE_LENGTH} символов",
@@ -61,8 +64,20 @@ async def _rate_limited(_: Request, __: Exception) -> JSONResponse:
     return _error(429, "Слишком много сообщений, подождите минуту")
 
 
+async def _unexpected_error(request: Request, exc: Exception) -> JSONResponse:
+    """Last resort: the client still gets JSON and the id from the access log.
+
+    The traceback is logged by the request middleware, which sees the exception first.
+    """
+    logger.error("Unhandled %s -> 500", type(exc).__name__)
+    response = _error(500, UNEXPECTED_ERROR_DETAIL)
+    response.headers[REQUEST_ID_HEADER] = getattr(request.state, "request_id", "-")
+    return response
+
+
 def register_error_handlers(app: FastAPI) -> None:
     for error in APPLICATION_ERRORS:
         app.add_exception_handler(error, _application_error)
     app.add_exception_handler(RequestValidationError, _validation_error)
     app.add_exception_handler(RateLimitExceeded, _rate_limited)
+    app.add_exception_handler(Exception, _unexpected_error)

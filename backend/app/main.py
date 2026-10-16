@@ -11,7 +11,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 
-from app.application.chat_with_neighbor import ChatWithNeighbor
+from app.application.agent_service import ChatWithNeighbor
 from app.application.ports import ChatModel
 from app.infrastructure.config import Settings, load_settings
 from app.infrastructure.deepseek import build_chat_model
@@ -25,7 +25,11 @@ logger = logging.getLogger("app")
 
 
 def configure_logging(level: str) -> None:
-    """App loggers use LOG_LEVEL; third-party libraries only report warnings."""
+    """App loggers use LOG_LEVEL; third-party libraries only report warnings.
+
+    Called from the lifespan, not at import: importing the app must not change
+    logging for the process that imports it (tests, scripts, tooling).
+    """
     handler = logging.StreamHandler()
     handler.addFilter(RequestIdFilter())
     handler.setFormatter(
@@ -60,6 +64,7 @@ def create_app(settings: Settings, chat_model: ChatModel | None = None) -> FastA
 
     @asynccontextmanager
     async def lifespan(_: FastAPI) -> AsyncIterator[None]:
+        configure_logging(settings.log_level)
         _log_startup(settings, neighbors.ids())
         try:
             yield
@@ -95,5 +100,4 @@ def create_app(settings: Settings, chat_model: ChatModel | None = None) -> FastA
 
 
 _settings = load_settings()
-configure_logging(_settings.log_level)
 app = create_app(_settings)

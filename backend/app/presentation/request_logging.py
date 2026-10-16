@@ -37,6 +37,9 @@ async def log_requests(
 ) -> Response:
     request_id = _request_id(request)
     token = request_id_var.set(request_id)
+    # The contextvar is reset in `finally`, so an unhandled error handler can only
+    # recover the id from the request state to put it on the 500 response.
+    request.state.request_id = request_id
     started = time.perf_counter()
     client = request.client.host if request.client else "-"
     try:

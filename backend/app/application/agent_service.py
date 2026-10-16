@@ -10,7 +10,6 @@ from app.application.ports import ChatModel, ConversationCodec, NeighborReposito
 from app.application.prompt import build_system_prompt
 from app.domain.conversation import Turn
 
-# Logs carry sizes and counts only: conversation text is personal data.
 logger = logging.getLogger(__name__)
 
 
