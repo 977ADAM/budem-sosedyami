@@ -19,7 +19,7 @@ class ChatResult:
     context: str
 
 
-class ChatWithNeighbor:
+class AgentService:
     def __init__(
         self, neighbors: NeighborRepository, model: ChatModel, codec: ConversationCodec
     ) -> None:
