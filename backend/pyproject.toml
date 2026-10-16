@@ -1,6 +1,6 @@
 [project]
 name = "budem-sosedyami-backend"
-version = "0.1.0"
+version = "0.4.0"
 description = "Локальный FastAPI backend демо-соседей"
 requires-python = ">=3.11"
 dependencies = [
