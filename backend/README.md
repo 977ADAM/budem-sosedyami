@@ -1,6 +1,6 @@
 # Backend
 
-FastAPI → LangGraph/LangChain → DeepSeek. Переписка не сохраняется в базе:
+FastAPI → LangChain (`langchain-deepseek`) → DeepSeek. Переписка не сохраняется в базе:
 клиент передаёт зашифрованную историю в `context`.
 [Контракт API](../README.md).
 
