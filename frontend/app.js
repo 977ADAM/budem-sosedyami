@@ -1,7 +1,9 @@
-// Local development uses a separate API port; deployment uses the site's origin.
+// Local development uses a separate API port. In deployment the page is served
+// under a path prefix (/sosedyami/), so "." keeps requests same-origin and
+// inside that prefix: ./api/... resolves to /sosedyami/api/...
 const API_URL = ["127.0.0.1", "localhost"].includes(location.hostname) && location.port === "3000"
   ? "http://127.0.0.1:8000"
-  : "";
+  : ".";
 const contexts = {};
 const form = document.querySelector("#chat-form");
 

@@ -3,6 +3,7 @@ frontend/.svelte-kit/
 frontend/dist/
 backend/.venv/
 backend/.env
+/.env
 backend/__pycache__/
 *.py[cod]
 .DS_Store

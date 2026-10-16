@@ -2,9 +2,10 @@ services:
   backend:
     build: ./backend
     env_file: ./backend/.env
-    # Only the host reverse proxy should access this port.
+    # Only the host reverse proxy should access this port. BACKEND_PORT is read
+    # from the project-level .env next to this file (Compose interpolation).
     ports:
-      - "127.0.0.1:8000:8000"
+      - "127.0.0.1:${BACKEND_PORT:-8000}:8000"
     restart: unless-stopped
     init: true
     healthcheck:
