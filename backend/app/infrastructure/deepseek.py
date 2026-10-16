@@ -6,7 +6,7 @@ from collections.abc import Sequence
 from typing import Any
 
 from langchain_core.messages import AIMessage, AnyMessage, BaseMessage, HumanMessage, SystemMessage
-from langchain_openai import ChatOpenAI
+from langchain_deepseek import ChatDeepSeek
 from langgraph.graph import END, START, MessagesState, StateGraph
 from openai import APITimeoutError, OpenAIError
 from pydantic import SecretStr
@@ -102,7 +102,7 @@ def build_chat_model(settings: Settings) -> ChatModel:
         return UnconfiguredChatModel()
 
     return DeepSeekChatModel(
-        ChatOpenAI(
+        ChatDeepSeek(
             model=settings.deepseek_model,
             api_key=SecretStr(settings.deepseek_api_key),
             base_url=settings.deepseek_base_url,

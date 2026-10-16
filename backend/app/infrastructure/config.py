@@ -31,6 +31,10 @@ def _origins(configured: str | None) -> tuple[str, ...]:
     return tuple(origin.strip().rstrip("/") for origin in configured.split(",") if origin.strip())
 
 
+def _base_url(configured: str | None) -> str:
+    return (configured or "").strip().rstrip("/") or Settings().deepseek_base_url
+
+
 def load_settings() -> Settings:
     load_dotenv(Path(__file__).resolve().parents[2] / ".env")
     defaults = Settings()
@@ -38,7 +42,11 @@ def load_settings() -> Settings:
     return Settings(
         deepseek_api_key=os.getenv("DEEPSEEK_API_KEY", "").strip(),
         deepseek_model=os.getenv("DEEPSEEK_MODEL", defaults.deepseek_model),
+        deepseek_base_url=_base_url(os.getenv("DEEPSEEK_BASE_URL")),
         deepseek_max_tokens=int(os.getenv("DEEPSEEK_MAX_TOKENS", defaults.deepseek_max_tokens)),
+        deepseek_timeout_seconds=float(
+            os.getenv("DEEPSEEK_TIMEOUT_SECONDS", defaults.deepseek_timeout_seconds)
+        ),
         context_secret=context_secret or secrets.token_urlsafe(32),
         context_secret_is_ephemeral=not context_secret,
         context_ttl_seconds=int(os.getenv("CONTEXT_TTL_SECONDS", defaults.context_ttl_seconds)),

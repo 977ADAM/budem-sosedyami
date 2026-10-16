@@ -3,6 +3,7 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
+from langchain_deepseek import ChatDeepSeek
 from openai import APIConnectionError, APITimeoutError
 
 from app.application.errors import ChatModelFailed, ChatModelNotConfigured, ChatModelTimeout
@@ -61,7 +62,22 @@ class DeepSeekChatModelTests(unittest.IsolatedAsyncioTestCase):
         with self.assertRaises(ChatModelNotConfigured):
             await model.reply("system", [], "Привет")
 
-    def test_api_key_gives_a_deepseek_model_with_limited_output(self) -> None:
-        model = build_chat_model(Settings(deepseek_api_key="key", deepseek_max_tokens=123))
+    def test_api_key_gives_an_official_chatdeepseek_with_configured_settings(self) -> None:
+        model = build_chat_model(
+            Settings(
+                deepseek_api_key="key",
+                deepseek_model="deepseek-chat",
+                deepseek_base_url="https://api.deepseek.com/v1",
+                deepseek_max_tokens=123,
+                deepseek_timeout_seconds=12.5,
+            )
+        )
         self.assertIsInstance(model, DeepSeekChatModel)
-        self.assertEqual(model._llm.max_tokens, 123)
+        llm = model._llm
+        self.assertIsInstance(llm, ChatDeepSeek)
+        self.assertEqual(llm.model_name, "deepseek-chat")
+        self.assertEqual(llm.api_base, "https://api.deepseek.com/v1")
+        self.assertEqual(llm.max_tokens, 123)
+        self.assertEqual(llm.request_timeout, 12.5)
+        self.assertEqual(llm.max_retries, 0)
+        self.assertEqual(llm.api_key.get_secret_value(), "key")
