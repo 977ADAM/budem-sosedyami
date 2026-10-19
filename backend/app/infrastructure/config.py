@@ -24,7 +24,7 @@ class Settings:
     context_secret_is_ephemeral: bool = False
     context_ttl_seconds: int = 24 * 60 * 60
     rate_limit: str = "20/minute"
-    max_retries: int = 2
+    max_retries: int = 0
     cors_origins: tuple[str, ...] = ("http://127.0.0.1:3000", "http://localhost:3000")
     log_level: str = "INFO"
 
@@ -37,8 +37,8 @@ class Settings:
                 raise ValueError(f"{name}: ожидается целое число больше нуля")
         if not math.isfinite(self.deepseek_timeout_seconds) or self.deepseek_timeout_seconds <= 0:
             raise ValueError("DEEPSEEK_TIMEOUT_SECONDS: ожидается конечное число больше нуля")
-        if self.max_retries < 0:
-            raise ValueError("MAX_RETRIES: ожидается целое число не меньше нуля")
+        if self.max_retries != 0:
+            raise ValueError("MAX_RETRIES: повторные попытки запрещены, допустимо только 0")
         try:
             rate_limits = parse_many(self.rate_limit)
             zero_window = re.search(r"(?:/|\bper)\s*0+\s*[a-z]", self.rate_limit, re.IGNORECASE)

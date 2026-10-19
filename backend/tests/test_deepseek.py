@@ -1,5 +1,6 @@
 import json
 import unittest
+from unittest.mock import patch
 
 import httpx2 as httpx
 from openai import AsyncOpenAI
@@ -14,6 +15,7 @@ class DeepSeekChatModelTests(unittest.IsolatedAsyncioTestCase):
     def model(self, handler):
         client = AsyncOpenAI(
             api_key="key", base_url="https://api.deepseek.com", max_retries=0,
+            _strict_response_validation=True,
             http_client=httpx.AsyncClient(transport=httpx.MockTransport(handler)),
         )
         self.addAsyncCleanup(client.close)
@@ -105,10 +107,49 @@ class DeepSeekChatModelTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_configures_client_timeout_and_retries(self):
         model = build_chat_model(Settings(
-            deepseek_api_key="key", deepseek_timeout_seconds=12.5, max_retries=4,
+            deepseek_api_key="key", deepseek_timeout_seconds=12.5, max_retries=0,
         ))
         self.addAsyncCleanup(model.aclose)
         self.assertIsInstance(model._client, AsyncOpenAI)
         self.assertEqual(str(model._client.base_url).rstrip("/"), "https://api.deepseek.com")
         self.assertEqual(model._client.timeout, 12.5)
-        self.assertEqual(model._client.max_retries, 4)
+        self.assertEqual(model._client.max_retries, 0)
+
+    async def test_provider_errors_are_not_retried_with_default_settings(self):
+        for failure in [429, 500, "timeout", "connection"]:
+            with self.subTest(failure=failure):
+                requests = []
+
+                def handler(request, requests=requests, failure=failure):
+                    requests.append(request)
+                    if failure == "timeout":
+                        raise httpx.ReadTimeout("timeout")
+                    if failure == "connection":
+                        raise httpx.ConnectError("offline")
+                    return httpx.Response(failure, json={"error": {"message": "failed"}})
+
+                def client_factory(**kwargs):
+                    return AsyncOpenAI(
+                        **kwargs,
+                        http_client=httpx.AsyncClient(transport=httpx.MockTransport(handler)),
+                    )
+
+                with patch("app.infrastructure.deepseek.AsyncOpenAI", side_effect=client_factory):
+                    model = build_chat_model(Settings(deepseek_api_key="key"))
+                self.addAsyncCleanup(model.aclose)
+                expected = ChatModelTimeout if failure == "timeout" else ChatModelFailed
+                with self.assertRaises(expected):
+                    await model.reply("system", [], "Привет")
+                self.assertEqual(len(requests), 1)
+
+    async def test_malformed_provider_responses_are_failures(self):
+        responses = [
+            httpx.Response(200, text="broken JSON", headers={"content-type": "application/json"}),
+            httpx.Response(200, json={}),
+            httpx.Response(200, json={"choices": [{"message": None}]}),
+        ]
+        for response in responses:
+            with self.subTest(body=response.text):
+                model = self.model(lambda request, response=response: response)
+                with self.assertRaises(ChatModelFailed):
+                    await model.reply("system", [], "Привет")

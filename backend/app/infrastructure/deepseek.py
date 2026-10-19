@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 import time
 from collections.abc import Sequence
+from json import JSONDecodeError
 
 from openai import APITimeoutError, AsyncOpenAI, OpenAIError
 from openai.types.chat import ChatCompletion, ChatCompletionMessageParam
@@ -37,7 +38,7 @@ class DeepSeekChatModel:
         except APITimeoutError as exc:
             logger.error("DeepSeek timed out after %.0fms", self._elapsed_ms(started))
             raise ChatModelTimeout from exc
-        except OpenAIError as exc:
+        except (OpenAIError, JSONDecodeError) as exc:
             logger.error(
                 "DeepSeek failed after %.0fms: %s status=%s %s",
                 self._elapsed_ms(started),
@@ -100,6 +101,7 @@ def build_chat_model(settings: Settings) -> ChatModel:
             base_url="https://api.deepseek.com",
             timeout=settings.deepseek_timeout_seconds,
             max_retries=settings.max_retries,
+            _strict_response_validation=True,
         ),
         model=settings.deepseek_model,
         max_tokens=settings.deepseek_max_tokens,

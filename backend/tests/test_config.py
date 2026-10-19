@@ -12,6 +12,7 @@ class LoadSettingsTests(unittest.TestCase):
 
     def test_defaults_are_used_without_environment(self) -> None:
         settings = self.load()
+        self.assertEqual(settings.max_retries, 0)
         self.assertEqual(settings.deepseek_model, "deepseek-flash")
         self.assertEqual(settings.deepseek_max_tokens, 1000)
         self.assertEqual(settings.deepseek_timeout_seconds, 30.0)
@@ -39,6 +40,7 @@ class LoadSettingsTests(unittest.TestCase):
             ("CONTEXT_TTL_SECONDS", "-1"),
             ("CONTEXT_TTL_SECONDS", "abc"),
             ("MAX_RETRIES", "-1"),
+            ("MAX_RETRIES", "1"),
             ("MAX_RETRIES", "abc"),
         ]
         for name, value in cases:
