@@ -13,7 +13,7 @@ import time
 from collections import Counter
 from dataclasses import dataclass, field
 
-import httpx
+import httpx2 as httpx
 
 AGENTS = ("anton", "marina", "pavel", "vera")
 QUESTIONS = (

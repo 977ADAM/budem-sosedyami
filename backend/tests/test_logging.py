@@ -1,11 +1,10 @@
 import unittest
 
-from fakes import FakeChatModel
+from fakes import FakeChatModel, build_test_app
 from fastapi.testclient import TestClient
 
 from app.application.errors import ChatModelFailed
 from app.infrastructure.config import Settings
-from app.main import create_app
 
 SETTINGS = Settings(context_secret="secret", rate_limit="1000/minute")
 SECRET_TEXT = "Мой адрес Ленина 5"
@@ -14,7 +13,7 @@ SECRET_TEXT = "Мой адрес Ленина 5"
 class LoggingTests(unittest.TestCase):
     def setUp(self) -> None:
         self.model = FakeChatModel(reply="Понятно")
-        self.client = TestClient(create_app(SETTINGS, self.model))
+        self.client = TestClient(build_test_app(SETTINGS, self.model))
 
     def test_every_response_has_a_request_id(self) -> None:
         generated = self.client.post("/api/agents/anton/chat", json={"message": "Привет"})

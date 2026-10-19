@@ -3,11 +3,10 @@ from __future__ import annotations
 import logging
 import time
 from collections.abc import Sequence
+from json import JSONDecodeError
 
-from langchain_core.messages import AIMessage, AnyMessage, BaseMessage, HumanMessage, SystemMessage
-from langchain_deepseek import ChatDeepSeek
-from openai import APITimeoutError, OpenAIError
-from pydantic import SecretStr
+from openai import APITimeoutError, AsyncOpenAI, OpenAIError
+from openai.types.chat import ChatCompletion, ChatCompletionMessageParam
 
 from app.application.errors import ChatModelFailed, ChatModelNotConfigured, ChatModelTimeout
 from app.application.ports import ChatModel
@@ -18,21 +17,28 @@ logger = logging.getLogger(__name__)
 
 
 class DeepSeekChatModel:
-    def __init__(self, llm: ChatDeepSeek) -> None:
-        self._llm = llm
+    def __init__(self, client: AsyncOpenAI, *, model: str, max_tokens: int) -> None:
+        self._client = client
+        self._model = model
+        self._max_tokens = max_tokens
 
     async def reply(self, system_prompt: str, history: Sequence[Turn], message: str) -> str:
-        messages: list[AnyMessage] = [SystemMessage(content=system_prompt)]
+        messages: list[ChatCompletionMessageParam] = [{"role": "system", "content": system_prompt}]
         for turn in history:
-            messages += [HumanMessage(content=turn.message), AIMessage(content=turn.reply)]
-        messages.append(HumanMessage(content=message))
+            messages += [
+                {"role": "user", "content": turn.message},
+                {"role": "assistant", "content": turn.reply},
+            ]
+        messages.append({"role": "user", "content": message})
         started = time.perf_counter()
         try:
-            result = await self._llm.ainvoke(messages)
+            result = await self._client.chat.completions.create(
+                model=self._model, messages=messages, max_tokens=self._max_tokens
+            )
         except APITimeoutError as exc:
             logger.error("DeepSeek timed out after %.0fms", self._elapsed_ms(started))
             raise ChatModelTimeout from exc
-        except OpenAIError as exc:
+        except (OpenAIError, JSONDecodeError) as exc:
             logger.error(
                 "DeepSeek failed after %.0fms: %s status=%s %s",
                 self._elapsed_ms(started),
@@ -43,36 +49,35 @@ class DeepSeekChatModel:
             raise ChatModelFailed from exc
 
         self._log_usage(result, self._elapsed_ms(started), len(messages))
-        if not isinstance(result.content, str) or not result.content.strip():
+        content = result.choices[0].message.content if result.choices else None
+        if not isinstance(content, str) or not content.strip():
             logger.error("DeepSeek returned an empty reply")
             raise ChatModelFailed("Empty model response")
-        return result.content.strip()
+        return content.strip()
 
     async def aclose(self) -> None:
-        client = getattr(self._llm, "root_async_client", None)
-        if client is not None:
-            await client.close()
+        await self._client.close()
 
     @staticmethod
     def _elapsed_ms(started: float) -> float:
         return (time.perf_counter() - started) * 1000
 
     @staticmethod
-    def _log_usage(result: BaseMessage, elapsed_ms: float, sent_messages: int) -> None:
-        usage = getattr(result, "usage_metadata", None) or {}
-        metadata = getattr(result, "response_metadata", None) or {}
+    def _log_usage(result: ChatCompletion, elapsed_ms: float, sent_messages: int) -> None:
+        usage = result.usage
+        finish_reason = result.choices[0].finish_reason if result.choices else "-"
         logger.info(
             "DeepSeek replied in %.0fms model=%s messages=%d input_tokens=%s cached_tokens=%s "
             "output_tokens=%s finish_reason=%s",
             elapsed_ms,
-            metadata.get("model_name", "-"),
+            result.model,
             sent_messages,
-            usage.get("input_tokens"),
-            usage.get("input_token_details", {}).get("cache_read"),
-            usage.get("output_tokens"),
-            metadata.get("finish_reason", "-"),
+            usage.prompt_tokens if usage else None,
+            getattr(usage, "prompt_cache_hit_tokens", None),
+            usage.completion_tokens if usage else None,
+            finish_reason,
         )
-        if metadata.get("finish_reason") == "length":
+        if finish_reason == "length":
             logger.warning("DeepSeek reply was cut off by DEEPSEEK_MAX_TOKENS")
 
 
@@ -91,11 +96,13 @@ def build_chat_model(settings: Settings) -> ChatModel:
         return UnconfiguredChatModel()
 
     return DeepSeekChatModel(
-        ChatDeepSeek(
-            model = settings.deepseek_model, # type: ignore[call-arg]
-            api_key = SecretStr(settings.deepseek_api_key),
-            max_tokens = settings.deepseek_max_tokens,
-            timeout = settings.deepseek_timeout_seconds,
-            max_retries = settings.max_retries
-        )
+        AsyncOpenAI(
+            api_key=settings.deepseek_api_key,
+            base_url="https://api.deepseek.com",
+            timeout=settings.deepseek_timeout_seconds,
+            max_retries=settings.max_retries,
+            _strict_response_validation=True,
+        ),
+        model=settings.deepseek_model,
+        max_tokens=settings.deepseek_max_tokens,
     )
