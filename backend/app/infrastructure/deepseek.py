@@ -40,11 +40,10 @@ class DeepSeekChatModel:
             raise ChatModelTimeout from exc
         except (OpenAIError, JSONDecodeError) as exc:
             logger.error(
-                "DeepSeek failed after %.0fms: %s status=%s %s",
+                "DeepSeek failed after %.0fms: %s status=%s",
                 self._elapsed_ms(started),
                 type(exc).__name__,
                 getattr(exc, "status_code", "-"),
-                exc,
             )
             raise ChatModelFailed from exc
 

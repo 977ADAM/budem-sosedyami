@@ -153,3 +153,15 @@ class DeepSeekChatModelTests(unittest.IsolatedAsyncioTestCase):
                 model = self.model(lambda request, response=response: response)
                 with self.assertRaises(ChatModelFailed):
                     await model.reply("system", [], "Привет")
+
+    async def test_provider_error_body_is_not_logged(self):
+        secret = "private-conversation-text"
+        model = self.model(lambda request: httpx.Response(
+            500, json={"error": {"message": secret}}
+        ))
+        with self.assertLogs("app.infrastructure.deepseek", level="ERROR") as logs:
+            with self.assertRaises(ChatModelFailed):
+                await model.reply("system", [], "Привет")
+        output = "\n".join(logs.output)
+        self.assertIn("InternalServerError status=500", output)
+        self.assertNotIn(secret, output)
