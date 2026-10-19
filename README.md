@@ -156,7 +156,7 @@ basic-auth) описана в [deploy/README.md](deploy/README.md).
 Запустите backend по [инструкции](backend/README.md), затем из корня проекта:
 
 ```sh
-make dev-frontend
+make frontend
 ```
 
 Откройте `http://127.0.0.1:3000`. Фронтенд обращается к

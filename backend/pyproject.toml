@@ -6,6 +6,7 @@ requires-python = ">=3.11"
 dependencies = [
     "cryptography>=50.0.2",
     "fastapi>=0.115.0",
+    "limits>=5.8.0",
     "openai>=3.31.0",
     "python-dotenv>=1.0.0",
     "slowapi>=0.1.10",

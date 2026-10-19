@@ -17,6 +17,7 @@ from app.infrastructure.deepseek import build_chat_model
 from app.infrastructure.fernet_codec import FernetConversationCodec
 from app.infrastructure.logging import configure_logging, log_startup
 from app.infrastructure.neighbor_catalog import StaticNeighborRepository
+from app.infrastructure.rate_limiting import build_rate_limit_check
 from app.presentation.errors import register_error_handlers
 from app.presentation.request_logging import REQUEST_ID_HEADER, log_requests
 from app.presentation.routes import router
@@ -51,7 +52,7 @@ app = FastAPI(
 app.state.settings = settings
 app.state.agent_service = AgentService(neighbors=neighbors, model=model, codec=codec)
 app.state.limiter = limiter
-app.state.check_rate_limit = limiter.limit(settings.rate_limit)(lambda request: None)
+app.state.check_rate_limit = build_rate_limit_check(limiter, settings.rate_limit)
 
 app.add_middleware(
     CORSMiddleware,
