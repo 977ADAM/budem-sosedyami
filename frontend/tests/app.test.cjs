@@ -19,7 +19,7 @@ function setup(fetch) {
       createElement() { return {}; },
     },
     location: {hostname: 'dev.coresmart.tech', port: ''}, fetch, TypeError,
-  });
+  }, {filename: require('node:path').join(__dirname, '../app.js')});
   return {form, logs, submit: () => submit({preventDefault() {}})};
 }
 const ok = (reply = 'Ответ', context = 'token') => ({ok: true, status: 200, json: async () => ({reply, context})});

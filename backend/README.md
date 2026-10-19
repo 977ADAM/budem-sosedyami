@@ -88,9 +88,12 @@ IP клиента. В `CORS_ORIGINS` указывайте полные адре�
 make lint       # Ruff: app, tests и loadtest
 make typecheck  # mypy: app и loadtest
 make test       # unittest
-make check      # все проверки
+make coverage   # unittest + отчёт покрытия, порог 97%
+make check      # lint + typecheck + coverage
 ```
 
+Покрытие считается по `app/` с учётом ветвлений (`[tool.coverage]` в
+`pyproject.toml`); `make coverage` завершается ошибкой ниже порога.
 Настройки находятся в `backend/pyproject.toml`; версии закреплены в `uv.lock`.
 GitHub Actions запускает `make check` при push и pull request на Python 3.11 и 3.14.
 
