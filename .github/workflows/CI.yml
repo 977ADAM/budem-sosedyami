@@ -28,7 +28,7 @@ jobs:
           cache-dependency-glob: backend/uv.lock
       - name: Install dependencies
         run: uv sync --locked --project backend
-      - name: Lint, typecheck and test
+      - name: Lint, typecheck and test with coverage
         run: make check
 
   frontend:
@@ -39,5 +39,8 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           persist-credentials: false
-      - name: Test chat UI behavior
-        run: node --test frontend/tests/app.test.cjs
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "22"
+      - name: Test chat UI behavior with coverage
+        run: make frontend-test

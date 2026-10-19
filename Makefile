@@ -2,7 +2,7 @@
 
 UV ?= uv
 
-.PHONY: backend-install backend loadtest-server loadtest frontend lint typecheck test check
+.PHONY: backend-install backend loadtest-server loadtest frontend frontend-test lint typecheck test coverage check
 
 lint: ## Check Python code with Ruff
 	cd backend && $(UV) run --locked ruff check .
@@ -13,7 +13,11 @@ typecheck: ## Check backend types with mypy
 test: ## Run backend unit tests
 	cd backend && $(UV) run --locked python -m unittest discover -s tests
 
-check: lint typecheck test ## Run all backend checks
+coverage: ## Run backend tests with the coverage threshold
+	cd backend && $(UV) run --locked coverage run -m unittest discover -s tests
+	cd backend && $(UV) run --locked coverage report
+
+check: lint typecheck coverage ## Run all backend checks
 
 backend-install: ## Sync Python dependencies with uv
 	cd backend && $(UV) sync
@@ -30,3 +34,8 @@ loadtest: ## стресс тест приложения проверка выд�
 
 frontend:
 	cd frontend && python3 -m http.server 3000 --bind 127.0.0.1
+
+frontend-test: ## Run frontend tests with coverage thresholds
+	node --test --experimental-test-coverage --test-coverage-lines=95 \
+		--test-coverage-branches=80 --test-coverage-functions=95 \
+		frontend/tests/app.test.cjs

@@ -5,5 +5,8 @@ backend/__pycache__/
 *.py[cod]
 .ruff_cache/
 .mypy_cache/
+.coverage
+htmlcov/
+coverage.xml
 .DS_Store
 .playwright-mcp

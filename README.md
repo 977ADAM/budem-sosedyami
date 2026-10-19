@@ -177,6 +177,8 @@ make frontend
 
 ## Проверки фронтенда
 
-Нужен Node.js 20+. Из корня проекта: `node --test frontend/tests/app.test.cjs`.
+Нужен Node.js 22+. Из корня проекта: `make frontend-test` — тесты с покрытием
+и порогами (строки 95%, ветки 80%, функции 95%). Без покрытия:
+`node --test frontend/tests/app.test.cjs`.
 Тесты проверяют ошибки сети и API, сохранение контекста и защиту от повторной отправки.
 GitHub Actions запускает их отдельной проверкой `Frontend checks`.
