@@ -1,0 +1,79 @@
+name: Deploy
+
+on:
+  push:
+    tags: ["v*.*.*"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Deploy ${{ github.ref_name }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out the release commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Validate the release
+        env:
+          REF_TYPE: ${{ github.ref_type }}
+          TAG: ${{ github.ref_name }}
+          SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          if [ "$REF_TYPE" = "tag" ]; then
+            [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || {
+              echo "::error::Expected a vX.Y.Z tag, got '$TAG'"
+              exit 1
+            }
+            version="$(sed -n 's/^version = "\(.*\)"/\1/p' backend/pyproject.toml)"
+            [[ "v$version" = "$TAG" ]] || {
+              echo "::error::Tag $TAG does not match backend version v$version"
+              exit 1
+            }
+          fi
+          git fetch --no-tags origin main
+          git merge-base --is-ancestor "$SHA" origin/main || {
+            echo "::error::$SHA is not on main"
+            exit 1
+          }
+          echo "Validated $REF_TYPE '$TAG' at $SHA (on main)"
+
+      - name: Deploy over SSH
+        uses: appleboy/ssh-action@0ff4204d59e8e51228ff73bce53f80d53301dee2 # v1.2.0
+        with:
+          host: ${{ secrets.HOST }}
+          username: ${{ secrets.USERNAME }}
+          key: ${{ secrets.KEY }}
+          port: ${{ secrets.PORT }}
+          fingerprint: ${{ secrets.HOST_FINGERPRINT }}
+          command_timeout: 20m
+          envs: GITHUB_REF_TYPE,GITHUB_REF_NAME,GITHUB_SHA
+          script: |
+            set -euo pipefail
+            cd /opt/budem-sosedyami
+            git fetch --tags --force --prune origin
+            git checkout -f main
+            if [ "$GITHUB_REF_TYPE" = "tag" ]; then
+              git reset --hard "refs/tags/${GITHUB_REF_NAME}"
+            else
+              git reset --hard origin/main
+            fi
+            bash deploy/deploy.sh
+
+      - name: Summarize
+        if: success()
+        run: |
+          echo "### Production deployed" >> "$GITHUB_STEP_SUMMARY"
+          echo "- ref: ${{ github.ref_type }} ${{ github.ref_name }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "- commit: ${{ github.sha }}" >> "$GITHUB_STEP_SUMMARY"

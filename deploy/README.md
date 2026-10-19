@@ -107,7 +107,25 @@ ssh myserver 'docker logs --tail 3 $(docker ps --filter name=budem-sosedyami -q)
 Без `realip` лимит 20/мин обходится перебором `X-Forwarded-For`, а в логах
 оказывается выдуманный адрес.
 
-## Обновление кода
+## CD: деплой по тегу
+
+Пуш тега `vX.Y.Z` запускает [Deploy workflow](../.github/workflows/deploy.yml).
+Перед выкаткой workflow проверяет, что тег совпадает с `version` в
+`backend/pyproject.toml` и указывает на коммит в `main`. Ручной запуск
+(`workflow_dispatch`) выкатывает текущий `origin/main`.
+
+На сервере workflow делает `git fetch --tags`, переводит рабочую копию на
+коммит тега и запускает [deploy.sh](deploy.sh): пересборка контейнера,
+ожидание healthcheck, проверка `/health` и контракта API (неизвестный сосед
+даёт `422`). Деплои не пересекаются (`concurrency: deploy-production`).
+
+Секреты репозитория: `HOST`, `USERNAME`, `KEY`, `PORT`, `HOST_FINGERPRINT`.
+Ключ добавлен в `/root/.ssh/authorized_keys` с комментарием
+`github-actions:977ADAM/budem-sosedyami`. При ротации добавьте новый ключ,
+замените `KEY` и удалите старую строку. `HOST_FINGERPRINT` — SHA256 RSA-ключа
+хоста: сервер ограничивает `HostKeyAlgorithms` набором с `ssh-rsa`.
+
+## Обновление кода вручную
 
 ```sh
 ssh myserver 'cd /opt/budem-sosedyami && git pull && docker compose up -d --build --wait && curl -fsS http://127.0.0.1:8010/health'
