@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import logging
+import tomllib
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -36,6 +38,12 @@ async def lifespan(application: FastAPI) -> AsyncIterator[None]:
         logger.info("Stopped")
 
 
+def _project_version() -> str:
+    """The release version has a single source: backend/pyproject.toml."""
+    pyproject = Path(__file__).resolve().parents[1] / "pyproject.toml"
+    return str(tomllib.loads(pyproject.read_text(encoding="utf-8"))["project"]["version"])
+
+
 settings = load_settings()
 model = build_chat_model(settings)
 neighbors = StaticNeighborRepository()
@@ -44,7 +52,7 @@ limiter = Limiter(key_func=get_remote_address)
 
 app = FastAPI(
     title="Будем соседями? API",
-    version="0.4.0",
+    version=_project_version(),
     description="Один эндпоинт: отправьте сообщение соседу и верните полученный `context` "
     "в следующем запросе, чтобы продолжить разговор.",
     lifespan=lifespan,

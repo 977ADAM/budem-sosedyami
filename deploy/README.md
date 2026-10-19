@@ -114,6 +114,10 @@ ssh myserver 'docker logs --tail 3 $(docker ps --filter name=budem-sosedyami -q)
 `backend/pyproject.toml` и указывает на коммит в `main`. Ручной запуск
 (`workflow_dispatch`) выкатывает текущий `origin/main`.
 
+Версия задаётся только в `backend/pyproject.toml`: приложение читает её при
+старте (`app.main._project_version`), а `backend/tests/test_version.py` не
+даёт появиться второй копии версии.
+
 На сервере workflow делает `git fetch --tags`, переводит рабочую копию на
 коммит тега и запускает [deploy.sh](deploy.sh): пересборка контейнера,
 ожидание healthcheck, проверка `/health` и контракта API (неизвестный сосед
