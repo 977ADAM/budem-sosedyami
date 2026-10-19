@@ -20,6 +20,7 @@ form.addEventListener("submit", async (event) => {
   event.preventDefault();
   const agent = form.agent.value;
   const message = form.message.value.trim();
+  if (!message || form.send.disabled) return;
   const log = document.querySelector(`#log-${agent}`);
   bubble(log, "from-user", message);
   const answer = bubble(log, "from-agent is-pending", "печатает…");
@@ -32,8 +33,16 @@ form.addEventListener("submit", async (event) => {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ message, context: contexts[agent] }),
     });
-    const data = await response.json().catch(() => ({ detail: `Ошибка сервера (${response.status})` }));
-    if (!response.ok) throw new Error(data.detail);
+    const data = await response.json().catch(() => null);
+    if (!response.ok) {
+      throw new Error(typeof data?.detail === "string" && data.detail
+        ? data.detail
+        : `Ошибка сервера (${response.status})`);
+    }
+    if (typeof data?.reply !== "string" || !data.reply.trim()
+      || typeof data?.context !== "string" || !data.context) {
+      throw new Error("API вернул некорректный ответ");
+    }
     contexts[agent] = data.context;
     answer.className = "bubble from-agent";
     answer.textContent = data.reply;

@@ -167,3 +167,9 @@ make frontend
 Не вводите личные данные: сообщения отправляются в DeepSeek.
 
 Документация API: `/docs`. OpenAPI-схема: `/openapi.json`.
+
+## Проверки фронтенда
+
+Нужен Node.js 20+. Из корня проекта: `node --test frontend/tests/app.test.cjs`.
+Тесты проверяют ошибки сети и API, сохранение контекста и защиту от повторной отправки.
+GitHub Actions запускает их отдельной проверкой `Frontend checks`.
