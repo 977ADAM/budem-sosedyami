@@ -154,6 +154,10 @@ curl http://127.0.0.1:8000/health
 Боевая площадка `dev.coresmart.tech` (angie, префикс `/sosedyami/`, доступ по
 basic-auth) описана в [deploy/README.md](deploy/README.md).
 
+Обновление боевой площадки — пуш тега `v*.*.*`: GitHub Actions проверит, что
+тег соответствует версии в `backend/pyproject.toml` и лежит на `main`, затем
+пересоберёт backend, проверит `/health` и контракт API.
+
 ## Локальное демо
 
 Запустите backend по [инструкции](backend/README.md), затем из корня проекта:
