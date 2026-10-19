@@ -1,10 +1,8 @@
+import json
 import unittest
-from types import SimpleNamespace
-from unittest.mock import AsyncMock
 
-from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
-from langchain_deepseek import ChatDeepSeek
-from openai import APIConnectionError, APITimeoutError
+import httpx2 as httpx
+from openai import AsyncOpenAI
 
 from app.application.errors import ChatModelFailed, ChatModelNotConfigured, ChatModelTimeout
 from app.domain.conversation import Turn
@@ -13,69 +11,104 @@ from app.infrastructure.deepseek import DeepSeekChatModel, UnconfiguredChatModel
 
 
 class DeepSeekChatModelTests(unittest.IsolatedAsyncioTestCase):
-    def llm(self, **kwargs) -> SimpleNamespace:
-        return SimpleNamespace(ainvoke=AsyncMock(**kwargs))
-
-    async def test_sends_system_prompt_history_and_message_in_order(self) -> None:
-        llm = self.llm(return_value=AIMessage(content="  Ответ  "))
-        model = DeepSeekChatModel(llm)
-
-        reply = await model.reply("Ты — Антон", [Turn("Привет", "Здравствуйте")], "Где кофе?")
-
-        self.assertEqual(reply, "Ответ")
-        messages = llm.ainvoke.await_args.args[0]
-        self.assertEqual(
-            [(type(m), m.content) for m in messages],
-            [
-                (SystemMessage, "Ты — Антон"),
-                (HumanMessage, "Привет"),
-                (AIMessage, "Здравствуйте"),
-                (HumanMessage, "Где кофе?"),
-            ],
+    def model(self, handler):
+        client = AsyncOpenAI(
+            api_key="key", base_url="https://api.deepseek.com", max_retries=0,
+            http_client=httpx.AsyncClient(transport=httpx.MockTransport(handler)),
         )
+        self.addAsyncCleanup(client.close)
+        return DeepSeekChatModel(client, model="deepseek-chat", max_tokens=123)
 
-    async def test_provider_failures_become_application_errors(self) -> None:
-        cases = [
-            (APITimeoutError(request=None), ChatModelTimeout),
-            (APIConnectionError(request=None), ChatModelFailed),
-        ]
-        for error, expected in cases:
+    def response(self, content="  Ответ  ", finish_reason="stop", usage=None):
+        return httpx.Response(200, json={
+            "id": "chat-1", "object": "chat.completion", "created": 1,
+            "model": "deepseek-chat",
+            "choices": [{"index": 0, "message": {"role": "assistant", "content": content},
+                         "finish_reason": finish_reason}],
+            "usage": usage,
+        })
+
+    async def test_sends_system_prompt_history_and_message_in_order(self):
+        requests = []
+
+        def handler(request):
+            requests.append(request)
+            return self.response()
+
+        reply = await self.model(handler).reply(
+            "Ты — Антон", [Turn("Привет", "Здравствуйте")], "Где кофе?"
+        )
+        self.assertEqual(reply, "Ответ")
+        self.assertEqual(str(requests[0].url), "https://api.deepseek.com/chat/completions")
+        self.assertEqual(json.loads(requests[0].content), {
+            "model": "deepseek-chat", "max_tokens": 123,
+            "messages": [
+                {"role": "system", "content": "Ты — Антон"},
+                {"role": "user", "content": "Привет"},
+                {"role": "assistant", "content": "Здравствуйте"},
+                {"role": "user", "content": "Где кофе?"},
+            ],
+        })
+
+    async def test_provider_failures_become_application_errors(self):
+        for error, expected in [
+            (httpx.ReadTimeout("timeout"), ChatModelTimeout),
+            (httpx.ConnectError("offline"), ChatModelFailed),
+        ]:
             with self.subTest(expected.__name__):
-                model = DeepSeekChatModel(self.llm(side_effect=error))
+                def handler(request, error=error):
+                    raise error
                 with self.assertRaises(expected):
-                    await model.reply("system", [], "Привет")
+                    await self.model(handler).reply("system", [], "Привет")
 
-    async def test_empty_reply_is_a_failure(self) -> None:
-        model = DeepSeekChatModel(self.llm(return_value=AIMessage(content="   ")))
+    async def test_http_error_is_a_failure(self):
+        model = self.model(lambda request: httpx.Response(500, json={"error": "failed"}))
         with self.assertRaises(ChatModelFailed):
             await model.reply("system", [], "Привет")
 
-    async def test_aclose_closes_the_http_client(self) -> None:
-        llm = self.llm()
-        llm.root_async_client = SimpleNamespace(close=AsyncMock())
-        await DeepSeekChatModel(llm).aclose()
-        llm.root_async_client.close.assert_awaited_once()
+    async def test_empty_reply_is_a_failure(self):
+        for content in ["   ", None]:
+            with self.subTest(content=content):
+                model = self.model(lambda request, content=content: self.response(content))
+                with self.assertRaises(ChatModelFailed):
+                    await model.reply("system", [], "Привет")
 
-    async def test_missing_api_key_gives_an_unconfigured_model(self) -> None:
+    async def test_missing_choices_is_a_failure(self):
+        model = self.model(lambda request: httpx.Response(200, json={
+            "id": "chat-1", "object": "chat.completion", "created": 1,
+            "model": "deepseek-chat", "choices": [],
+        }))
+        with self.assertRaises(ChatModelFailed):
+            await model.reply("system", [], "Привет")
+
+    async def test_logs_usage_and_truncation(self):
+        model = self.model(lambda request: self.response(finish_reason="length", usage={
+            "prompt_tokens": 20, "completion_tokens": 5, "total_tokens": 25,
+            "prompt_cache_hit_tokens": 12,
+        }))
+        with self.assertLogs("app.infrastructure.deepseek", level="INFO") as logs:
+            await model.reply("system", [], "Привет")
+        output = "\n".join(logs.output)
+        self.assertIn("input_tokens=20 cached_tokens=12 output_tokens=5 finish_reason=length", output)
+        self.assertIn("cut off", output)
+
+    async def test_aclose_closes_the_http_client(self):
+        model = self.model(lambda request: self.response())
+        await model.aclose()
+        self.assertTrue(model._client.is_closed())
+
+    async def test_missing_api_key_gives_an_unconfigured_model(self):
         model = build_chat_model(Settings(deepseek_api_key=""))
         self.assertIsInstance(model, UnconfiguredChatModel)
         with self.assertRaises(ChatModelNotConfigured):
             await model.reply("system", [], "Привет")
 
-    def test_api_key_gives_an_official_chatdeepseek_with_configured_settings(self) -> None:
-        model = build_chat_model(
-            Settings(
-                deepseek_api_key="key",
-                deepseek_model="deepseek-chat",
-                deepseek_max_tokens=123,
-                deepseek_timeout_seconds=12.5,
-            )
-        )
-        self.assertIsInstance(model, DeepSeekChatModel)
-        llm = model._llm
-        self.assertIsInstance(llm, ChatDeepSeek)
-        self.assertEqual(llm.model_name, "deepseek-chat")
-        self.assertEqual(llm.max_tokens, 123)
-        self.assertEqual(llm.request_timeout, 12.5)
-        self.assertEqual(llm.max_retries, 2)
-        self.assertEqual(llm.api_key.get_secret_value(), "key")
+    async def test_configures_client_timeout_and_retries(self):
+        model = build_chat_model(Settings(
+            deepseek_api_key="key", deepseek_timeout_seconds=12.5, max_retries=4,
+        ))
+        self.addAsyncCleanup(model.aclose)
+        self.assertIsInstance(model._client, AsyncOpenAI)
+        self.assertEqual(str(model._client.base_url).rstrip("/"), "https://api.deepseek.com")
+        self.assertEqual(model._client.timeout, 12.5)
+        self.assertEqual(model._client.max_retries, 4)

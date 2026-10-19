@@ -1,6 +1,6 @@
 # Backend
 
-FastAPI → LangChain (`langchain-deepseek`) → DeepSeek. Переписка не сохраняется в базе:
+FastAPI → OpenAI SDK (`AsyncOpenAI`) → DeepSeek. Переписка не сохраняется в базе:
 клиент передаёт зашифрованную историю в `context`.
 [Контракт API](../README.md).
 
@@ -38,8 +38,8 @@ uv run uvicorn app.main:app --reload --no-access-log --host 127.0.0.1 --port 800
 | `CORS_ORIGINS` | `http://127.0.0.1:3000,http://localhost:3000` |
 | `LOG_LEVEL` | `INFO`; в `.env.example` задан `DEBUG` |
 
-Если `DEEPSEEK_BASE_URL` пуст, адрес берётся из `langchain-deepseek` (её же стандартный
-`DEEPSEEK_API_BASE` тоже учитывается). Задавайте переменную только для прокси или шлюза.
+Клиент обращается напрямую к `https://api.deepseek.com` через OpenAI-совместимый API.
+`MAX_RETRIES` задаёт число повторных попыток SDK (по умолчанию 2).
 
 Для продакшена задайте постоянный `CONTEXT_SECRET`, одинаковый для всех процессов.
 Без него история сбрасывается после перезапуска и не переносится между процессами.
@@ -59,7 +59,8 @@ IP клиента. В `CORS_ORIGINS` указывайте полные адре�
 - `app/application/` — сценарий чата, промпт и интерфейсы зависимостей.
 - `app/infrastructure/` — DeepSeek, Fernet, каталог соседей и настройки.
 - `app/presentation/` — HTTP, валидация, ошибки и логирование запросов.
-- `app/main.py` — сборка приложения: `create_app(settings, chat_model=None)`.
+- `app/main.py` — последовательная сборка приложения на уровне модуля; настройки
+  доступны через `app.state.settings`.
   Логирование настраивается в `lifespan`, поэтому импорт `app.main` не меняет
   настройки логов процесса, который его импортирует.
 

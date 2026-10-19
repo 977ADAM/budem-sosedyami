@@ -2,7 +2,7 @@ import unittest
 
 from fakes import FakeChatModel
 
-from app.application.agent_service import ChatWithNeighbor
+from app.application.agent_service import AgentService
 from app.application.errors import ChatModelTimeout, NeighborNotFound
 from app.infrastructure.fernet_codec import FernetConversationCodec
 from app.infrastructure.neighbor_catalog import StaticNeighborRepository
@@ -11,7 +11,7 @@ from app.infrastructure.neighbor_catalog import StaticNeighborRepository
 class ChatWithNeighborTests(unittest.IsolatedAsyncioTestCase):
     def setUp(self) -> None:
         self.model = FakeChatModel()
-        self.chat = ChatWithNeighbor(
+        self.chat = AgentService(
             neighbors=StaticNeighborRepository(),
             model=self.model,
             codec=FernetConversationCodec("secret", ttl_seconds=60),

@@ -1,11 +1,10 @@
 import unittest
 
-from fakes import FakeChatModel
+from fakes import FakeChatModel, build_test_app
 from fastapi.testclient import TestClient
 
 from app.application.errors import ChatModelFailed, ChatModelNotConfigured, ChatModelTimeout
 from app.infrastructure.config import Settings
-from app.main import create_app
 
 SETTINGS = Settings(context_secret="secret", rate_limit="1000/minute")
 
@@ -13,7 +12,7 @@ SETTINGS = Settings(context_secret="secret", rate_limit="1000/minute")
 class HttpApiTests(unittest.TestCase):
     def setUp(self) -> None:
         self.model = FakeChatModel()
-        self.client = TestClient(create_app(SETTINGS, self.model))
+        self.client = TestClient(build_test_app(SETTINGS, self.model))
 
     def send(self, agent_id: str, message: str, context: str | None = None):
         payload = {"message": message} if context is None else {"message": message, "context": context}
@@ -54,14 +53,14 @@ class HttpApiTests(unittest.TestCase):
                 self.assertEqual((response.status_code, response.json()), (status, {"detail": detail}))
 
     def test_rate_limit_returns_a_readable_429(self) -> None:
-        client = TestClient(create_app(Settings(context_secret="s", rate_limit="2/minute"), FakeChatModel()))
+        client = TestClient(build_test_app(Settings(context_secret="s", rate_limit="2/minute"), FakeChatModel()))
         statuses = [client.post("/api/agents/anton/chat", json={"message": "Hi"}).status_code for _ in range(3)]
         last = client.post("/api/agents/anton/chat", json={"message": "Hi"})
         self.assertEqual(statuses, [200, 200, 429])
         self.assertEqual(last.json(), {"detail": "Слишком много сообщений, подождите минуту"})
 
     def test_model_is_closed_on_shutdown(self) -> None:
-        with TestClient(create_app(SETTINGS, self.model)):
+        with TestClient(build_test_app(SETTINGS, self.model)):
             self.assertFalse(self.model.closed)
         self.assertTrue(self.model.closed)
 
@@ -83,7 +82,7 @@ class HttpApiTests(unittest.TestCase):
                 self.assertEqual(response.headers.get("access-control-allow-origin") == origin, allowed)
 
     def test_unexpected_error_returns_readable_json_with_the_request_id(self) -> None:
-        app = create_app(SETTINGS, self.model)
+        app = build_test_app(SETTINGS, self.model)
 
         @app.get("/boom")
         async def boom() -> None:
@@ -101,3 +100,30 @@ class HttpApiTests(unittest.TestCase):
     def test_openapi_documents_the_single_endpoint(self) -> None:
         schema = self.client.get("/openapi.json").json()
         self.assertEqual(list(schema["paths"]), ["/api/agents/{agent_id}/chat"])
+
+    def test_health_and_docs_are_not_rate_limited(self) -> None:
+        app = build_test_app(Settings(context_secret="s", rate_limit="1/minute"))
+        client = TestClient(app)
+        for _ in range(3):
+            self.assertEqual(client.get("/health").status_code, 200)
+            self.assertEqual(client.get("/openapi.json").status_code, 200)
+        self.assertEqual(client.post(
+            "/api/agents/anton/chat", json={"message": "Привет"}
+        ).status_code, 200)
+
+    def test_rate_limits_are_separate_for_neighbors_and_applications(self) -> None:
+        settings = Settings(context_secret="s", rate_limit="1/minute")
+        first = TestClient(build_test_app(settings))
+        second = TestClient(build_test_app(settings))
+        self.assertEqual(first.post(
+            "/api/agents/anton/chat", json={"message": "Привет"}
+        ).status_code, 200)
+        self.assertEqual(first.post(
+            "/api/agents/anton/chat", json={"message": "Ещё"}
+        ).status_code, 429)
+        self.assertEqual(first.post(
+            "/api/agents/marina/chat", json={"message": "Привет"}
+        ).status_code, 200)
+        self.assertEqual(second.post(
+            "/api/agents/anton/chat", json={"message": "Привет"}
+        ).status_code, 200)
